@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="nl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Bewijsverkenner infrageluid &amp; windturbines</title>
+<meta name="description" content="Peer-reviewed onderzoek naar infrageluid, laagfrequent geluid en gezondheid, ingericht voor zienswijzen en beroep tegen windturbineprojecten.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%231F3A5F'/%3E%3Cpath d='M9 22V10M14 25V7M19 21V11M24 18v-4' stroke='%23F6F4EF' stroke-width='2.4' stroke-linecap='round'/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://api.fontshare.com">
+<link href="https://api.fontshare.com/v2/css?f[]=satoshi@400,500,700&display=swap" rel="stylesheet">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Source+Serif+4:opsz,wght@8..60,500;8..60,600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="vendor/leaflet/leaflet.css">
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<a class="skip" href="#main">Naar inhoud</a>
+<header class="topbar">
+  <a class="brand" href="#/start" aria-label="Bewijsverkenner – start">
+    <svg class="logo" viewBox="0 0 32 32" fill="none" aria-hidden="true"><rect x="1" y="1" width="30" height="30" rx="6" stroke="currentColor" stroke-width="2"/><path d="M9 22V10M14 25V7M19 21V11M24 18v-4" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/></svg>
+    <span><strong>Bewijsverkenner</strong><small>infrageluid &amp; windturbines</small></span>
+  </a>
+  <nav class="tabs" aria-label="Modules">
+    <a href="#/studies" data-route="studies">Studies</a>
+    <a href="#/relevantie" data-route="relevantie">Relevantie</a>
+    <a href="#/argumenten" data-route="argumenten">Argumenten</a>
+    <a href="#/verweer" data-route="verweer">Verweer</a>
+    <a href="#/kaart" data-route="kaart">Kaart</a>
+    <a href="#/export" data-route="export">Export <span class="count" id="selCount">0</span></a>
+  </nav>
+  <button class="theme-toggle" id="themeToggle" type="button" aria-label="Wissel licht/donker">
+    <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg>
+  </button>
+</header>
+<main id="main" tabindex="-1"></main>
+<footer class="foot">
+  <p>Hulpmiddel voor het onderbouwen van zienswijzen en beroepschriften; geen juridisch advies. Samenvattingen zijn deels automatisch gegenereerd op basis van abstracts. Kernstudies (gemarkeerd) zijn nagelezen tegen het abstract. Controleer altijd de originele publicatie voordat je citeert. Peildatum database: 7 oktober 2026.</p>
+</footer>
+<div class="drawer" id="drawer" hidden>
+  <div class="drawer-backdrop" data-close></div>
+  <aside class="drawer-panel" role="dialog" aria-modal="true" aria-labelledby="drawerTitle">
+    <button class="icon-btn drawer-close" data-close aria-label="Sluiten">×</button>
+    <div id="drawerBody"></div>
+  </aside>
+</div>
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+<script src="data/studies.js"></script>
+<script src="data/arguments.js"></script>
+<script src="vendor/leaflet/leaflet.js"></script>
+<script src="vendor/docx.umd.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>
