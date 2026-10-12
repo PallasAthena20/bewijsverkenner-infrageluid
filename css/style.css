@@ -219,3 +219,28 @@ main:focus,main:focus-visible{outline:none}
 textarea{line-height:1.55;font-size:var(--text-base)}
 .evidence.pick li{display:flex;gap:var(--s3);align-items:flex-start}
 .evidence.pick input[type=checkbox]{margin-top:.3rem;flex:none;width:18px;height:18px;accent-color:var(--accent)}
+
+/* ---------- modules: hub, subnav, peer review ---------- */
+.subnav{position:sticky;top:var(--topbar-h,57px);z-index:40;background:var(--surface);border-bottom:1px solid var(--border)}
+.subnav-in{max-width:1240px;margin:0 auto;display:flex;align-items:center;gap:var(--s4);padding:6px var(--s5)}
+.subnav-title{font-family:var(--serif);font-weight:600;font-size:var(--text-sm);white-space:nowrap;color:var(--text)}
+.subnav nav{display:flex;gap:2px;overflow-x:auto;scrollbar-width:none}
+.subnav nav::-webkit-scrollbar{display:none}
+.subnav nav a{font-size:var(--text-sm);text-decoration:none;color:var(--muted);padding:5px 10px;border-radius:6px;white-space:nowrap}
+.subnav nav a:hover{color:var(--text);background:var(--surface-2)}
+.subnav nav a.active{color:var(--accent);background:var(--accent-soft);font-weight:700}
+@media (max-width:760px){.subnav{position:static}.subnav-in{flex-direction:column;align-items:flex-start;gap:4px;padding:8px var(--s4)}.subnav nav{width:100%}}
+.hub-hero{max-width:860px;margin:var(--s6) 0 var(--s6)}
+.hub-hero h1{margin:.4rem 0 .8rem}
+.hub{margin-bottom:var(--s6)}
+.hub-card{display:flex;flex-direction:column;text-decoration:none;color:var(--text);min-height:200px;border-top:4px solid var(--accent)}
+.hub-card:hover{color:var(--text);border-color:var(--accent);box-shadow:0 4px 18px color-mix(in srgb,var(--accent) 14%,transparent)}
+.hub-card h2{margin:.35rem 0 .5rem}
+.hub-card p{color:var(--muted);font-size:var(--text-sm);margin:0 0 var(--s4)}
+.hub-go{margin-top:auto;font-weight:700;color:var(--accent);font-size:var(--text-sm)}
+.hub-card.soon{border-top-color:var(--border);opacity:.7;cursor:not-allowed}
+.hub-card.soon .eyebrow{color:var(--muted)}
+.pr-peer{background:transparent;color:var(--ok);border:1px solid color-mix(in srgb,var(--ok) 45%,transparent)}
+.pr-onz{background:transparent;color:var(--muted);border:1px dashed var(--border)}
+.pr-niet{background:transparent;color:var(--warn,#9A5B13);border:1px solid color-mix(in srgb,var(--warn,#9A5B13) 50%,transparent)}
+.exp-mod{font-size:var(--text-sm);margin:14px 0 6px;color:var(--muted);text-transform:uppercase;letter-spacing:.04em}
