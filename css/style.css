@@ -244,3 +244,9 @@ textarea{line-height:1.55;font-size:var(--text-base)}
 .pr-onz{background:transparent;color:var(--muted);border:1px dashed var(--border)}
 .pr-niet{background:transparent;color:var(--warn,#9A5B13);border:1px solid color-mix(in srgb,var(--warn,#9A5B13) 50%,transparent)}
 .exp-mod{font-size:var(--text-sm);margin:14px 0 6px;color:var(--muted);text-transform:uppercase;letter-spacing:.04em}
+.kaart-bar{display:flex;flex-wrap:wrap;gap:var(--s4) var(--s6);align-items:flex-end;justify-content:space-between;margin-bottom:var(--s4);padding:var(--s4);border:1px solid var(--border);border-radius:10px;background:var(--surface)}
+.kaart-bar .field{margin:0}
+.chip[disabled]{opacity:.5;cursor:not-allowed}
+.hm-mod{margin-top:10px;padding-top:8px;border-top:1px solid var(--border);font-weight:700;font-size:var(--text-sm);color:var(--accent)}
+.home-n{flex:none;width:24px;height:24px;border-radius:50%;background:var(--accent);color:var(--surface);display:inline-flex;align-items:center;justify-content:center;font-size:12px;font-weight:700}
+[data-theme="dark"] .home-n{color:#10151C}

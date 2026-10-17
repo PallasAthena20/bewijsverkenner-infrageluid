@@ -598,70 +598,313 @@
 
   /* ---------- KAART ---------- */
   let mapInstance = null;
+  const ELEK_KAART = window.ELEK_KAART || [];
+  const KMODS = [['infra', 'Geluid (infra en laagfrequent)'], ['elek', 'Vervuilde elektriciteit'], ['bpa', 'BPA (binnenkort)']];
+  const OBJ = { turbine: 'windturbines', kabel: 'ondergrondse kabel', lijn: 'bovengrondse hoogspanningslijn', onderstation: 'onderstation', vee: 'veehouderij' };
   function haversine(a, b) { const R = 6371000, t = x => x * Math.PI / 180; const dLat = t(b[0] - a[0]), dLon = t(b[1] - a[1]); const h = Math.sin(dLat / 2) ** 2 + Math.cos(t(a[0])) * Math.cos(t(b[0])) * Math.sin(dLon / 2) ** 2; return 2 * R * Math.asin(Math.sqrt(h)); }
+  function segDist(p, a, b) {
+    const k = Math.cos(p[0] * Math.PI / 180) * 111320, m = 110540;
+    const P = [p[1] * k, p[0] * m], A = [a[1] * k, a[0] * m], B = [b[1] * k, b[0] * m];
+    const dx = B[0] - A[0], dy = B[1] - A[1], L2 = dx * dx + dy * dy;
+    let t = L2 ? ((P[0] - A[0]) * dx + (P[1] - A[1]) * dy) / L2 : 0; t = Math.max(0, Math.min(1, t));
+    return Math.hypot(P[0] - (A[0] + t * dx), P[1] - (A[1] + t * dy));
+  }
+  function mapState() {
+    const m = st.map;
+    if (!Array.isArray(m.stations)) m.stations = [];
+    if (!Array.isArray(m.lines)) m.lines = [];
+    if (!Array.isArray(m.mods) || !m.mods.length) m.mods = ['infra'];
+    return m;
+  }
+  function nearestTurbine(ll) { let best = null; st.map.turbines.forEach((t, i) => { const d = haversine(ll, t); if (!best || d < best.d) best = { d, i }; }); return best; }
+  function nearestStation(ll) { let best = null; st.map.stations.forEach((t, i) => { const d = haversine(ll, t); if (!best || d < best.d) best = { d, i }; }); return best; }
+  function nearestLine(ll, type) {
+    let best = null;
+    st.map.lines.filter(l => l.type === type && l.pts.length).forEach(l => {
+      const d = l.pts.length === 1 ? haversine(ll, l.pts[0]) : Math.min(...l.pts.slice(1).map((p, i) => segDist(ll, l.pts[i], p)));
+      if (best == null || d < best) best = d;
+    });
+    return best;
+  }
+  function homeInfo(h) {
+    const t = nearestTurbine(h.ll);
+    return { h, t, dT: t ? t.d : null, dS: (nearestStation(h.ll) || {}).d ?? null, dK: nearestLine(h.ll, 'kabel'), dL: nearestLine(h.ll, 'lijn') };
+  }
+  function infraHits(d) {
+    if (d == null) return { steun: [], verweer: [] };
+    const f = r => AFSTAND.filter(a => a.richting === r && a.max_m && d <= a.max_m).map(a => ({ a, s: get(a.id) })).filter(x => x.s);
+    return { steun: f('steun'), verweer: f('verweer') };
+  }
+  function elekHits(x) {
+    const groups = [];
+    const dist = { turbine: x.dT, onderstation: x.dS, kabel: x.dK, lijn: x.dL, vee: x.h.vee ? 0 : null };
+    ['turbine', 'kabel', 'lijn', 'onderstation', 'vee'].forEach(obj => {
+      const d = dist[obj]; if (d == null) return;
+      const ok = ELEK_KAART.filter(k => k.obj === obj && (k.max_m == null || d <= k.max_m)).map(k => ({ a: k, s: get(k.id) })).filter(y => y.s);
+      if (!ok.length) return;
+      groups.push({ obj, d, steun: ok.filter(y => y.a.richting === 'steun'), verweer: ok.filter(y => y.a.richting === 'verweer') });
+    });
+    return groups;
+  }
+  const kmods = () => mapState().mods.filter(m => m !== 'bpa');
+  const homesSorted = () => st.map.homes.map((h, i) => Object.assign(homeInfo(h), { i })).filter(x => x.t).sort((a, b) => a.dT - b.dT);
+  function distZin(x, tip) {
+    let z = `${x.h.naam} ligt op ${fmtM(x.dT)} van de dichtstbijzijnde windturbine`;
+    if (tip) z += ` (${(x.dT / tip).toLocaleString('nl-NL', { maximumFractionDigits: 1 })} keer de tiphoogte)`;
+    const extra = [];
+    if (kmods().includes('elek')) {
+      if (x.dK != null) extra.push(`${fmtM(x.dK)} van de ondergrondse kabel`);
+      if (x.dL != null) extra.push(`${fmtM(x.dL)} van de hoogspanningslijn`);
+      if (x.dS != null) extra.push(`${fmtM(x.dS)} van het onderstation`);
+    }
+    if (extra.length) z += ', ' + (extra.length > 1 ? extra.slice(0, -1).join(', ') + ' en ' + extra[extra.length - 1] : extra[0]);
+    return z + '.' + (x.h.vee && kmods().includes('elek') ? ' Op deze locatie worden dieren gehouden.' : '');
+  }
+  const capF = s => s.charAt(0).toUpperCase() + s.slice(1);
+  function kaartTekst(kind) {
+    const tip = Number(st.project.tiphoogte) || null;
+    const list = homesSorted(); const refs = new Map();
+    const c = s => { refs.set(String(s.id), s); return shortCite(s); };
+    const L = [];
+    const objs = ['windturbines'].concat(kmods().includes('elek') ? [st.map.lines.some(l => l.type === 'kabel') && 'kabels', st.map.lines.some(l => l.type === 'lijn') && 'hoogspanningslijn', st.map.stations.length && 'onderstation'].filter(Boolean) : []);
+    L.push(`Afstand tot woningen en relevant onderzoek${st.project.naam ? ' – ' + st.project.naam : ''}`);
+    L.push(`Op basis van de geplande locaties van de ${objs.length > 1 ? objs.slice(0, -1).join(', ') + ' en ' + objs[objs.length - 1] : objs[0]} liggen de onderstaande woningen op de genoemde afstanden. Per woning is aangegeven welk wetenschappelijk onderzoek bij die afstand relevant is. De woningen zijn geordend van dichtbij naar veraf.`);
+    list.forEach((x, n) => {
+      L.push(''); L.push(`${n + 1}. ${distZin(x, tip)}`);
+      if (kmods().includes('infra')) {
+        const r = infraHits(x.dT);
+        L.push(r.steun.length ? 'Geluid: deze afstand valt binnen de afstanden waarop in peer-reviewed onderzoek nadelige effecten bij omwonenden zijn gevonden: ' + r.steun.map(y => `${lower1(y.a.label)} (${c(y.s)})`).join('; ') + '.' : 'Geluid: deze afstand valt buiten de afstanden van de woonstudies met een nadelig effect. Recent onderzoek wijst er wel op dat infrageluid van moderne windturbines zich verder verspreidt dan gangbare rekenmodellen voorspellen (Mattsson et al., 2026).');
+      }
+      if (kmods().includes('elek')) {
+        const g = elekHits(x); const st2 = g.flatMap(y => y.steun);
+        L.push(st2.length ? 'Vervuilde elektriciteit: ' + st2.map(y => `${lower1(y.a.label)} (${c(y.s)})`).join('; ') + '.' : 'Vervuilde elektriciteit: voor deze afstand is geen specifiek onderzoek gevonden.');
+      }
+    });
+    L.push('');
+    if (kmods().includes('elek')) L.push('Vuile stroom en zwerfstroom verspreiden zich via het elektriciteitsnet en de grond. Afstand alleen is daarom geen garantie; alleen een onafhankelijke meting vóór en na de bouw kan uitwijzen of woningen en stallen worden getroffen.');
+    L.push(kind === 'beroep'
+      ? 'Appellant voert aan dat het bestreden besluit niet zorgvuldig is voorbereid en onvoldoende is gemotiveerd, omdat niet per woning is onderzocht en gemotiveerd waarom de gezondheidsrisico’s op deze afstanden aanvaardbaar zijn, en het hierboven genoemde onderzoek daarbij niet kenbaar is betrokken (artikelen 3:2 en 3:46 Awb).'
+      : 'Indiener verzoekt het bevoegd gezag per woning te onderzoeken en gemotiveerd aan te geven waarom de gezondheidsrisico’s op deze afstanden aanvaardbaar zijn, en het hierboven genoemde onderzoek daarbij te betrekken.');
+    if (refs.size || kmods().includes('infra')) {
+      if (kmods().includes('infra')) { const mt = INFRA_S.find(s => /mattsson/i.test(s.auteurs) && s.jaar === 2026); if (mt) refs.set(String(mt.id), mt); }
+      L.push(''); L.push('Literatuur'); [...refs.values()].sort((a, b) => a.auteurs.localeCompare(b.auteurs)).forEach(s => L.push(fullCite(s) + prNote(s)));
+    }
+    return L.join('\n');
+  }
+  // eigen kaartweergave (canvas) voor het rapport
+  async function mapImage(map) {
+    const pts = st.map.turbines.concat(st.map.homes.map(h => h.ll), st.map.stations, ...st.map.lines.map(l => l.pts));
+    if (pts.length) { map.fitBounds(L.latLngBounds(pts).pad(0.12), { animate: false, maxZoom: 16 }); await new Promise(r => setTimeout(r, 150)); }
+    const size = map.getSize(), sc = 2, z = Math.min(map.getZoom() + 1, 19);
+    const W = Math.max(600, size.x) * sc / 1, H = Math.round(W * 0.62);
+    const cpx = map.project(map.getCenter(), z), ox = cpx.x - W / 2, oy = cpx.y - H / 2;
+    const P = ll => { const p = map.project(L.latLng(ll[0], ll[1]), z); return [p.x - ox, p.y - oy]; };
+    const mpp = lat => 40075016.686 * Math.cos(lat * Math.PI / 180) / (256 * Math.pow(2, z));
+    const tiles = [];
+    for (let tx = Math.floor(ox / 256); tx <= Math.floor((ox + W) / 256); tx++) for (let ty = Math.floor(oy / 256); ty <= Math.floor((oy + H) / 256); ty++) tiles.push([tx, ty]);
+    const load = ([tx, ty]) => new Promise(res => { const n = Math.pow(2, z); if (ty < 0 || ty >= n) return res(null); const im = new Image(); im.crossOrigin = 'anonymous'; const to = setTimeout(() => res(null), 8000); im.onload = () => { clearTimeout(to); res({ im, tx, ty }); }; im.onerror = () => { clearTimeout(to); res(null); }; im.src = `https://tile.openstreetmap.org/${z}/${((tx % n) + n) % n}/${ty}.png`; });
+    const imgs = await Promise.all(tiles.map(load));
+    const draw = withTiles => {
+      const cv = document.createElement('canvas'); cv.width = W; cv.height = H; const g = cv.getContext('2d');
+      g.fillStyle = '#EEF0EA'; g.fillRect(0, 0, W, H);
+      if (withTiles) imgs.filter(Boolean).forEach(t => g.drawImage(t.im, t.tx * 256 - ox, t.ty * 256 - oy));
+      g.fillStyle = 'rgba(255,255,255,.18)'; g.fillRect(0, 0, W, H);
+      st.map.turbines.forEach(t => { const [x, y] = P(t); [500, 1000, 1500, 2000].forEach(r => { g.beginPath(); g.arc(x, y, r / mpp(t[0]), 0, 2 * Math.PI); g.strokeStyle = 'rgba(154,59,30,.65)'; g.lineWidth = 2; g.setLineDash(r === 500 ? [] : [10, 8]); g.stroke(); }); });
+      g.setLineDash([]);
+      if (kmods().includes('elek')) {
+        st.map.lines.forEach(l => { if (l.pts.length < 2) return; g.beginPath(); l.pts.forEach((p, i) => { const [x, y] = P(p); i ? g.lineTo(x, y) : g.moveTo(x, y); }); g.strokeStyle = l.type === 'kabel' ? '#6B4BA1' : '#B8860B'; g.lineWidth = 5; g.setLineDash(l.type === 'kabel' ? [14, 8] : []); g.stroke(); g.setLineDash([]); });
+        st.map.stations.forEach(s => { const [x, y] = P(s); g.fillStyle = '#6B4BA1'; g.strokeStyle = '#fff'; g.lineWidth = 3; g.fillRect(x - 13, y - 13, 26, 26); g.strokeRect(x - 13, y - 13, 26, 26); });
+      }
+      homesSorted().forEach((x, n) => { const a = P(x.h.ll), b = P(st.map.turbines[x.t.i]); g.beginPath(); g.moveTo(a[0], a[1]); g.lineTo(b[0], b[1]); g.strokeStyle = 'rgba(31,58,95,.8)'; g.lineWidth = 2; g.setLineDash([5, 7]); g.stroke(); g.setLineDash([]); });
+      st.map.turbines.forEach((t, i) => { const [x, y] = P(t); g.beginPath(); g.arc(x, y, 16, 0, 2 * Math.PI); g.fillStyle = '#9A3B1E'; g.fill(); g.lineWidth = 3; g.strokeStyle = '#fff'; g.stroke(); g.fillStyle = '#fff'; g.font = 'bold 16px Arial'; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText('T' + (i + 1), x, y + 1); });
+      homesSorted().forEach((x, n) => { const [px, py] = P(x.h.ll); g.beginPath(); g.arc(px, py, 15, 0, 2 * Math.PI); g.fillStyle = '#1F3A5F'; g.fill(); g.lineWidth = 3; g.strokeStyle = '#fff'; g.stroke(); g.fillStyle = '#fff'; g.font = 'bold 15px Arial'; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText(String(n + 1), px, py + 1);
+        const lbl = `${n + 1}. ${x.h.naam} – ${fmtM(x.dT)}`; g.font = 'bold 17px Arial'; g.textAlign = 'left'; const w = g.measureText(lbl).width; g.fillStyle = 'rgba(255,255,255,.92)'; g.fillRect(px + 20, py - 13, w + 12, 26); g.fillStyle = '#1F3A5F'; g.fillText(lbl, px + 26, py + 1); });
+      g.font = '14px Arial'; g.textAlign = 'right'; g.textBaseline = 'bottom'; g.fillStyle = 'rgba(255,255,255,.85)'; g.fillRect(W - 230, H - 24, 230, 24); g.fillStyle = '#333'; g.fillText(withTiles ? '© OpenStreetMap-bijdragers' : 'Schematische weergave', W - 8, H - 5);
+      return cv.toDataURL('image/png');
+    };
+    let url; try { url = draw(true); } catch (e) { url = draw(false); }
+    return { url, w: W, h: H };
+  }
+  async function buildKaartRapport(map) {
+    if (!window.docx) { toast('Word-module niet geladen'); return; }
+    const list = homesSorted();
+    if (!list.length) { toast('Plaats eerst turbines en woningen'); return; }
+    toast('Rapport wordt gemaakt…');
+    const img = await mapImage(map);
+    const { Document, Packer, Paragraph, TextRun, HeadingLevel, Table, TableRow, TableCell, WidthType, ExternalHyperlink, ShadingType, ImageRun, AlignmentType } = window.docx;
+    const T = (text, o = {}) => new TextRun(Object.assign({ text, size: 21, font: 'Calibri' }, o));
+    const P = (text, o = {}) => new Paragraph(Object.assign({ children: [T(text)], spacing: { after: 140, line: 290 } }, o));
+    const H = (text, level) => new Paragraph({ text, heading: level, spacing: { before: 260, after: 110 } });
+    const B = (bold, text, contra) => new Paragraph({ bullet: { level: 0 }, spacing: { after: 60 }, children: [T(bold, { bold: true, color: contra ? '5F636B' : undefined }), T(text, { color: contra ? '5F636B' : undefined })] });
+    const tip = Number(st.project.tiphoogte) || null; const refs = new Map(); const reg = s => { refs.set(String(s.id), s); return s; };
+    const mods = kmods(); const isE = mods.includes('elek'), isI = mods.includes('infra');
+    const k = [];
+    k.push(new Paragraph({ children: [T('Rapport kaart', { size: 20, color: '5F636B' })], spacing: { after: 60 } }));
+    k.push(new Paragraph({ children: [T('Afstand tot woningen en relevant wetenschappelijk onderzoek', { bold: true, size: 32, color: '1F3A5F' })], spacing: { after: 160 } }));
+    if (st.project.naam) k.push(P('Project: ' + st.project.naam)); if (st.project.gezag) k.push(P('Bevoegd gezag: ' + st.project.gezag));
+    k.push(P(`Onderwerpen: ${mods.map(m => KMODS.find(x => x[0] === m)[1].toLowerCase()).join('; ')}. ${st.map.turbines.length} windturbine${st.map.turbines.length === 1 ? '' : 's'}${tip ? ` met een tiphoogte van ${tip} m` : ''}, ${list.length} woning${list.length === 1 ? '' : 'en'}. Datum: ${new Date().toLocaleDateString('nl-NL')}.`));
+    const wPx = 620, hPx = Math.round(wPx * img.h / img.w);
+    k.push(new Paragraph({ alignment: AlignmentType.CENTER, children: [new ImageRun({ data: img.url, transformation: { width: wPx, height: hPx } })], spacing: { after: 80 } }));
+    k.push(new Paragraph({ children: [T(`Kaart: T = windturbine (rood), genummerde punten = woningen (blauw), ringen op 500 m, 1, 1,5 en 2 km${isE ? '; paarse stippellijn = ondergrondse kabel, gele lijn = hoogspanningslijn (HS-lijn), paars vierkant = onderstation' : ''}. Afstanden zijn hemelsbreed.`, { size: 18, color: '5F636B' })], spacing: { after: 200 } }));
+    k.push(H('Overzicht van dichtbij naar veraf', HeadingLevel.HEADING_1));
+    const cell = (t, bold, fill, w) => new TableCell({ width: { size: w, type: WidthType.PERCENTAGE }, shading: fill ? { type: ShadingType.CLEAR, color: 'auto', fill } : undefined, margins: { top: 50, bottom: 50, left: 80, right: 80 }, children: [new Paragraph({ children: [T(t || '–', { bold, size: 18, color: fill ? 'FFFFFF' : undefined })] })] });
+    const hdr = ['Nr.', 'Woning', 'Turbine', tip ? '× tiphoogte' : null, isE ? 'Kabel' : null, isE ? 'HS-lijn' : null, isE ? 'Onderstation' : null, 'Studies'].filter(Boolean);
+    const cw = Math.floor(100 / hdr.length);
+    const rows = [new TableRow({ tableHeader: true, children: hdr.map(h => cell(h, true, '1F3A5F', cw)) })];
+    list.forEach((x, n) => {
+      const ns = (isI ? infraHits(x.dT).steun.length : 0) + (isE ? elekHits(x).flatMap(g => g.steun).length : 0);
+      const v = [String(n + 1), x.h.naam, fmtM(x.dT), tip ? (x.dT / tip).toLocaleString('nl-NL', { maximumFractionDigits: 1 }) + '×' : null, isE ? (x.dK != null ? fmtM(x.dK) : '–') : null, isE ? (x.dL != null ? fmtM(x.dL) : '–') : null, isE ? (x.dS != null ? fmtM(x.dS) : '–') : null, String(ns)].filter(y => y !== null);
+      rows.push(new TableRow({ children: v.map((t, j) => cell(t, j < 2, null, cw)) }));
+    });
+    k.push(new Table({ width: { size: 100, type: WidthType.PERCENTAGE }, rows }));
+    k.push(H('Per woning', HeadingLevel.HEADING_1));
+    list.forEach((x, n) => {
+      k.push(H(`${n + 1}. ${x.h.naam} – ${fmtM(x.dT)}`, HeadingLevel.HEADING_2));
+      k.push(P(distZin(x, tip)));
+      if (isI) {
+        const r = infraHits(x.dT);
+        k.push(new Paragraph({ children: [T('Geluid: onderzoek dat bij deze afstand nadelige effecten vond', { bold: true })], spacing: { before: 80, after: 60 } }));
+        if (r.steun.length) r.steun.forEach(y => k.push(B(`${reg(y.s).auteurs} (${y.s.jaar || 'z.j.'}): `, y.a.label + '.')));
+        else k.push(P('Deze afstand valt buiten de afstanden van de woonstudies met een nadelig effect. Recent onderzoek wijst er wel op dat infrageluid verder reikt dan rekenmodellen voorspellen (Mattsson et al., 2026).'));
+        if (r.verweer.length) { k.push(new Paragraph({ children: [T('Verwacht verweer bij deze afstand', { bold: true, color: '5F636B' })], spacing: { before: 80, after: 60 } })); r.verweer.forEach(y => k.push(B(`${reg(y.s).auteurs} (${y.s.jaar || 'z.j.'}): `, y.a.label + '.', true))); }
+      }
+      if (isE) {
+        const gs = elekHits(x);
+        k.push(new Paragraph({ children: [T('Vervuilde elektriciteit', { bold: true })], spacing: { before: 100, after: 60 } }));
+        if (!gs.length) k.push(P('Geen specifiek onderzoek gevonden voor deze situatie.'));
+        gs.forEach(g => {
+          k.push(new Paragraph({ children: [T(`${capF(OBJ[g.obj])}${g.obj !== 'vee' ? ' (' + fmtM(g.d) + ')' : ''}`, { italics: false, bold: true, size: 20, color: '6B4BA1' })], spacing: { before: 40, after: 40 } }));
+          g.steun.forEach(y => k.push(B(`${reg(y.s).auteurs} (${y.s.jaar || 'z.j.'})${prNote(y.s)}: `, y.a.label + '.')));
+          g.verweer.forEach(y => k.push(B(`Verwacht verweer – ${reg(y.s).auteurs} (${y.s.jaar || 'z.j.'}): `, y.a.label + '.', true)));
+        });
+      }
+    });
+    k.push(H('Toelichting', HeadingLevel.HEADING_1));
+    if (isI) k.push(P('Geluid: de afstanden zijn gekoppeld aan woonstudies uit de database van peer-reviewed onderzoek naar infrageluid, laagfrequent geluid en gezondheid. Een studie wordt bij een woning genoemd als de woning binnen de afstand ligt waarop die studie effecten vond.'));
+    if (isE) k.push(P('Vervuilde elektriciteit: afstandsgrenzen zijn gebruikt als een studie die zelf noemt. Onderzoek over ondergrondse kabels wordt getoond tot 50 m van het tracé; dat is een keuze van deze tool, omdat het onderzoek alleen ‘vlak bij’ de kabel noemt. Vuile stroom en zwerfstroom verspreiden zich via het elektriciteitsnet en de grond; afstand alleen is daarom geen garantie. Bij bronnen die niet (aantoonbaar) peer-reviewed zijn, staat dat vermeld. Het bewijs voor gezondheidseffecten van vuile stroom is beperkt en omstreden.'));
+    k.push(P('Dit rapport is een hulpmiddel en geen juridisch advies. Controleer de oorspronkelijke publicaties voordat je citeert.', { children: [T('Dit rapport is een hulpmiddel en geen juridisch advies. Controleer de oorspronkelijke publicaties voordat je citeert.', { size: 19, color: '5F636B' })] }));
+    if (isI) { const mt = INFRA_S.find(s => /mattsson/i.test(s.auteurs) && s.jaar === 2026); if (mt) reg(mt); }
+    k.push(H('Literatuur', HeadingLevel.HEADING_1));
+    [...refs.values()].sort((a, b) => a.auteurs.localeCompare(b.auteurs)).forEach(s => {
+      const url = s.doi && !/^\d+$/.test(s.doi) ? `https://doi.org/${s.doi}` : s.link;
+      k.push(new Paragraph({ spacing: { after: 90 }, indent: { left: 360, hanging: 360 }, children: [T(`${s.auteurs} (${s.jaar || 'z.j.'}). ${s.titel.replace(/\.$/, '')}. ${s.tijdschrift && s.tijdschrift !== 'n.a.' ? s.tijdschrift + '. ' : ''}${prNote(s) ? prNote(s).trim() + ' ' : ''}`, { size: 19 })].concat(url ? [new ExternalHyperlink({ link: url, children: [T(url, { size: 19, color: '1F3A5F', underline: {} })] })] : []) }));
+    });
+    const doc = new Document({ creator: 'Bewijsverkenner windturbines', title: 'Rapport kaart: afstand tot woningen', styles: { default: { document: { run: { font: 'Calibri', size: 21 } } }, paragraphStyles: [{ id: 'Heading1', name: 'Heading 1', basedOn: 'Normal', next: 'Normal', run: { size: 28, bold: true, color: '1F3A5F', font: 'Calibri' } }, { id: 'Heading2', name: 'Heading 2', basedOn: 'Normal', next: 'Normal', run: { size: 24, bold: true, color: '1E2430', font: 'Calibri' } }] }, sections: [{ properties: { page: { margin: { top: 1100, bottom: 1100, left: 1100, right: 1100 } } }, children: k }] });
+    const blob = await Packer.toBlob(doc);
+    const a = document.createElement('a'); a.href = URL.createObjectURL(blob);
+    a.download = `Rapport_kaart${st.project.naam ? '_' + st.project.naam.replace(/[^\w-]+/g, '_') : ''}.docx`;
+    document.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1000);
+    toast('Rapport gedownload');
+  }
   function renderKaart() {
+    mapState();
     main.innerHTML = `
-      <div class="page-head"><div><div class="eyebrow">Hulpmiddel · infrageluid</div><h1>Kaart: afstand tot woningen</h1><p>Zoek een adres, kies wat je wilt plaatsen en klik op de kaart. De app berekent de afstand van elke woning tot de dichtstbijzijnde turbine en toont welke studies bij die afstand nadelige effecten vonden.</p></div></div>
+      <div class="page-head"><div><div class="eyebrow">Hulpmiddel · alle modules</div><h1>Kaart: afstand tot woningen</h1><p>Kies welk onderzoek je wilt zien, zoek een adres en klik op de kaart om turbines, woningen en bij vervuilde elektriciteit ook kabels en een onderstation te plaatsen. Per woning zie je de afstand en het onderzoek dat daarbij past, van dichtbij naar veraf.</p></div></div>
+      <div class="kaart-bar">
+        <div class="field"><span class="lbl">Onderzoek tonen</span><div class="chips" id="kmods">${KMODS.map(([k, l]) => k === 'bpa' ? `<button class="chip" disabled title="Deze module wordt later gebouwd">${l}</button>` : `<button class="chip ${st.map.mods.includes(k) ? 'on' : ''}" data-km="${k}" aria-pressed="${st.map.mods.includes(k)}">${l}</button>`).join('')}</div></div>
+        <div class="field"><span class="lbl">Gebruiken</span><div class="btn-row"><button class="btn btn-sm" id="kZw">Kopieer naar zienswijze</button><button class="btn btn-sm" id="kBe">Kopieer naar beroepschrift</button><button class="btn btn-sm btn-primary" id="kRap">Rapport maken (Word)</button></div></div>
+      </div>
       <div class="map-tools">
         <div class="searchbox"><input type="search" id="geo" placeholder="Zoek adres of plaats (Nederland)" autocomplete="off" aria-label="Adres zoeken"><div class="suggest" id="sug" hidden></div></div>
-        <div class="btn-row" role="group" aria-label="Plaatsen"><button class="btn on" data-mode="turbine">Turbine plaatsen</button><button class="btn" data-mode="home">Woning plaatsen</button></div>
+        <div class="btn-row" role="group" aria-label="Plaatsen" id="modes"></div>
         <label class="small" style="display:flex;align-items:center;gap:6px">Tiphoogte (m) <input type="number" id="tip" style="width:90px" min="50" max="400" value="${esc(st.project.tiphoogte || 250)}"></label>
         <button class="btn btn-sm" id="clearMap">Alles wissen</button>
       </div>
+      <p class="xs muted" id="lineHint" hidden style="margin:-4px 0 10px"></p>
       <div class="map-layout"><div id="map" role="application" aria-label="Kaart"></div><aside id="homes"></aside></div>
-      <p class="xs muted" style="margin-top:12px">Ringen rond turbines: 500 m, 1 km, 1,5 km en 2 km. Kaartgegevens © OpenStreetMap-bijdragers; adreszoeker: PDOK Locatieserver. Afstanden zijn hemelsbreed.</p>`;
-    let mode = 'turbine';
-    const map = L.map('map', { zoomControl: true }).setView(st.map.center || [52.045, 4.95], st.map.zoom || 13);
+      <p class="xs muted" style="margin-top:12px">Ringen rond turbines: 500 m, 1 km, 1,5 km en 2 km. Kaartgegevens © OpenStreetMap-bijdragers; adreszoeker: PDOK Locatieserver. Afstanden zijn hemelsbreed. Slepen verplaatst een punt; rechtsklik verwijdert het. Geen juridisch advies.</p>`;
+    let mode = 'turbine', activeLine = null;
+    const map = L.map('map', { zoomControl: true, doubleClickZoom: false }).setView(st.map.center || [52.045, 4.95], st.map.zoom || 13);
     mapInstance = map;
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19, attribution: '© OpenStreetMap' }).addTo(map);
+    L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19, attribution: '© OpenStreetMap', crossOrigin: true }).addTo(map);
     const layer = L.layerGroup().addTo(map);
-    const tIcon = L.divIcon({ className: 'turbine-icon', html: '<svg width="28" height="28" viewBox="0 0 28 28"><circle cx="14" cy="14" r="12" fill="#9A3B1E" stroke="#fff" stroke-width="2"/><path d="M14 14 14 5M14 14l7.8 4.5M14 14l-7.8 4.5" stroke="#fff" stroke-width="2" stroke-linecap="round"/></svg>', iconSize: [28, 28], iconAnchor: [14, 14] });
-    const hIcon = L.divIcon({ className: 'home-icon', html: '<svg width="26" height="26" viewBox="0 0 26 26"><circle cx="13" cy="13" r="11" fill="#1F3A5F" stroke="#fff" stroke-width="2"/><path d="M8 13.5 13 9l5 4.5V18H8z" fill="#fff"/></svg>', iconSize: [26, 26], iconAnchor: [13, 13] });
+    const tIcon = n => L.divIcon({ className: 'turbine-icon', html: `<svg width="28" height="28" viewBox="0 0 28 28"><circle cx="14" cy="14" r="12" fill="#9A3B1E" stroke="#fff" stroke-width="2"/><path d="M14 14 14 5M14 14l7.8 4.5M14 14l-7.8 4.5" stroke="#fff" stroke-width="2" stroke-linecap="round"/></svg>`, iconSize: [28, 28], iconAnchor: [14, 14] });
+    const hIcon = (vee) => L.divIcon({ className: 'home-icon', html: `<svg width="26" height="26" viewBox="0 0 26 26"><circle cx="13" cy="13" r="11" fill="${vee ? '#3E6B2A' : '#1F3A5F'}" stroke="#fff" stroke-width="2"/><path d="M8 13.5 13 9l5 4.5V18H8z" fill="#fff"/></svg>`, iconSize: [26, 26], iconAnchor: [13, 13] });
+    const sIcon = L.divIcon({ className: 'station-icon', html: '<svg width="24" height="24" viewBox="0 0 24 24"><rect x="2" y="2" width="20" height="20" rx="3" fill="#6B4BA1" stroke="#fff" stroke-width="2"/><path d="M13 5 8 13h4l-1 6 5-8h-4z" fill="#fff"/></svg>', iconSize: [24, 24], iconAnchor: [12, 12] });
+    function drawModes() {
+      const e = st.map.mods.includes('elek');
+      const ms = [['turbine', 'Turbine'], ['home', 'Woning']].concat(e ? [['kabel', 'Kabel (ondergronds)'], ['lijn', 'Hoogspanningslijn'], ['station', 'Onderstation']] : []);
+      if (!ms.find(m => m[0] === mode)) mode = 'turbine';
+      $('#modes').innerHTML = ms.map(([k, l]) => `<button class="btn btn-sm ${k === mode ? 'on' : ''}" data-mode="${k}">${l} plaatsen</button>`).join('') + (activeLine ? '<button class="btn btn-sm btn-primary" id="endLine">Lijn afronden</button>' : '');
+      const hint = $('#lineHint'); hint.hidden = !(mode === 'kabel' || mode === 'lijn'); hint.textContent = 'Klik punt voor punt het tracé op de kaart en kies daarna “Lijn afronden”. Rechtsklik op een lijn verwijdert die.';
+    }
+    $('#modes').addEventListener('click', e => {
+      if (e.target.closest('#endLine')) { activeLine = null; drawModes(); return; }
+      const b = e.target.closest('[data-mode]'); if (!b) return; mode = b.dataset.mode; if (mode !== 'kabel' && mode !== 'lijn') activeLine = null; drawModes();
+    });
     function draw() {
       layer.clearLayers();
+      const showE = st.map.mods.includes('elek');
       st.map.turbines.forEach((t, i) => {
         [500, 1000, 1500, 2000].forEach(r => L.circle(t, { radius: r, color: '#9A3B1E', weight: 1, opacity: .6, fill: r === 500, fillOpacity: .05, dashArray: r === 500 ? null : '4 4', interactive: false }).addTo(layer));
-        const m = L.marker(t, { icon: tIcon, draggable: true, title: `Turbine ${i + 1}` }).addTo(layer).bindTooltip(`Turbine ${i + 1}`);
+        const m = L.marker(t, { icon: tIcon(i + 1), draggable: true, title: `Turbine ${i + 1}` }).addTo(layer).bindTooltip(`Turbine ${i + 1}`);
         m.on('dragend', e => { const p = e.target.getLatLng(); st.map.turbines[i] = [p.lat, p.lng]; save(); draw(); });
         m.on('contextmenu', () => { st.map.turbines.splice(i, 1); save(); draw(); });
       });
+      if (showE) {
+        st.map.lines.forEach((l, li) => {
+          const pl = L.polyline(l.pts, { color: l.type === 'kabel' ? '#6B4BA1' : '#B8860B', weight: 4, dashArray: l.type === 'kabel' ? '8 6' : null }).addTo(layer).bindTooltip(l.type === 'kabel' ? 'Ondergrondse kabel' : 'Hoogspanningslijn');
+          pl.on('contextmenu', () => { st.map.lines.splice(li, 1); if (activeLine === l) activeLine = null; save(); draw(); drawModes(); });
+          l.pts.forEach((p, pi) => { const cm = L.circleMarker(p, { radius: 4, color: '#fff', weight: 1, fillColor: l.type === 'kabel' ? '#6B4BA1' : '#B8860B', fillOpacity: 1 }).addTo(layer); cm.on('contextmenu', ev => { L.DomEvent.stop(ev); l.pts.splice(pi, 1); if (!l.pts.length) st.map.lines.splice(li, 1); save(); draw(); }); });
+        });
+        st.map.stations.forEach((s, i) => {
+          const m = L.marker(s, { icon: sIcon, draggable: true, title: 'Onderstation' }).addTo(layer).bindTooltip('Onderstation');
+          m.on('dragend', e => { const p = e.target.getLatLng(); st.map.stations[i] = [p.lat, p.lng]; save(); draw(); });
+          m.on('contextmenu', () => { st.map.stations.splice(i, 1); save(); draw(); });
+        });
+      }
       st.map.homes.forEach((h, i) => {
-        const m = L.marker(h.ll, { icon: hIcon, draggable: true, title: h.naam }).addTo(layer).bindTooltip(h.naam);
+        const m = L.marker(h.ll, { icon: hIcon(h.vee && showE), draggable: true, title: h.naam }).addTo(layer).bindTooltip(h.naam);
         m.on('dragend', e => { const p = e.target.getLatLng(); st.map.homes[i].ll = [p.lat, p.lng]; save(); draw(); });
         m.on('contextmenu', () => { st.map.homes.splice(i, 1); save(); draw(); });
-        const d = nearest(h.ll); if (d) L.polyline([h.ll, st.map.turbines[d.i]], { color: '#1F3A5F', weight: 1.5, dashArray: '3 5' }).addTo(layer);
+        const d = nearestTurbine(h.ll); if (d) L.polyline([h.ll, st.map.turbines[d.i]], { color: '#1F3A5F', weight: 1.5, dashArray: '3 5', interactive: false }).addTo(layer);
       });
       drawHomes();
     }
-    function nearest(ll) { let best = null; st.map.turbines.forEach((t, i) => { const d = haversine(ll, t); if (!best || d < best.d) best = { d, i }; }); return best; }
+    const cite = x => `<button class="cell-btn" data-detail="${x.s.id}">${esc(shortCite(x.s))}</button>`;
     function drawHomes() {
       const tip = Number($('#tip').value) || null;
       const box = $('#homes');
+      const mods = kmods();
       if (!st.map.turbines.length && !st.map.homes.length) { box.innerHTML = '<div class="empty">Plaats eerst een of meer turbines en daarna de woningen die je wilt beoordelen.<br><br><span class="xs">Slepen verplaatst een punt; rechtsklik verwijdert het.</span></div>'; return; }
-      const list = st.map.homes.map((h, i) => ({ h, i, n: nearest(h.ll) })).filter(x => x.n).sort((a, b) => a.n.d - b.n.d);
-      box.innerHTML = `<div class="card" style="padding:16px;margin-bottom:12px"><b>${st.map.turbines.length}</b> turbine${st.map.turbines.length === 1 ? '' : 's'} · <b>${st.map.homes.length}</b> woning${st.map.homes.length === 1 ? '' : 'en'}${list.length ? `<div class="btn-row" style="margin-top:10px"><button class="btn btn-sm btn-primary" id="useDist">Gebruik ${fmtM(list[0].n.d)} in projectgegevens</button></div>` : ''}</div>` +
-        (list.length ? list.map(({ h, i, n }) => {
-          const steun = AFSTAND.filter(a => a.richting === 'steun' && a.max_m && n.d <= a.max_m).map(a => ({ a, s: get(a.id) })).filter(x => x.s);
-          const contra = AFSTAND.filter(a => a.richting === 'verweer' && a.max_m && n.d <= a.max_m).map(a => ({ a, s: get(a.id) })).filter(x => x.s);
-          return `<div class="home-item"><div style="display:flex;justify-content:space-between;align-items:baseline;gap:8px"><input type="text" value="${esc(h.naam)}" data-hname="${i}" aria-label="Naam woning" style="max-width:60%"><span class="dist">${fmtM(n.d)}</span></div>
-            <div class="xs muted" style="margin-top:4px">tot turbine ${n.i + 1}${tip ? ` · ${(n.d / tip).toLocaleString('nl-NL', { maximumFractionDigits: 1 })}× tiphoogte` : ''}</div>
-            ${steun.length ? `<ul class="anchors">${steun.map(x => `<li>● ${esc(x.a.label)} – <button class="cell-btn" data-detail="${x.s.id}">${esc(shortCite(x.s))}</button></li>`).join('')}</ul>` : '<p class="xs muted" style="margin:8px 0 0">Buiten de afstanden van de woonstudies met een nadelig effect. Recent onderzoek wijst er wel op dat infrageluid verder reikt dan modellen voorspellen (Mattsson et al., 2026).</p>'}
-            ${contra.length ? `<details class="xs" style="margin-top:6px"><summary class="muted">Verwacht verweer bij deze afstand (${contra.length})</summary><ul class="anchors">${contra.map(x => `<li class="contra">${esc(x.a.label)} – <button class="cell-btn" data-detail="${x.s.id}">${esc(shortCite(x.s))}</button></li>`).join('')}</ul></details>` : ''}
-            <div class="btn-row" style="margin-top:8px"><button class="btn btn-sm" data-htext="${i}">Kopieer alinea</button></div></div>`;
+      if (!mods.length) { box.innerHTML = '<div class="empty">Kies bovenaan welk onderzoek je wilt zien.</div>'; return; }
+      const list = homesSorted();
+      box.innerHTML = `<div class="card" style="padding:16px;margin-bottom:12px"><b>${st.map.turbines.length}</b> turbine${st.map.turbines.length === 1 ? '' : 's'} · <b>${st.map.homes.length}</b> woning${st.map.homes.length === 1 ? '' : 'en'}${mods.includes('elek') ? ` · <b>${st.map.lines.length}</b> lijn${st.map.lines.length === 1 ? '' : 'en'} · <b>${st.map.stations.length}</b> onderstation${st.map.stations.length === 1 ? '' : 's'}` : ''}<div class="xs muted" style="margin-top:4px">Gesorteerd van dichtbij naar veraf.</div>${list.length ? `<div class="btn-row" style="margin-top:10px"><button class="btn btn-sm" id="useDist">Gebruik ${fmtM(list[0].dT)} in projectgegevens</button></div>` : ''}</div>` +
+        (list.length ? list.map((x, n) => {
+          let html = `<div class="home-item"><div style="display:flex;justify-content:space-between;align-items:baseline;gap:8px"><span class="home-n">${n + 1}</span><input type="text" value="${esc(x.h.naam)}" data-hname="${x.i}" aria-label="Naam woning" style="flex:1;min-width:0"><span class="dist">${fmtM(x.dT)}</span></div>
+            <div class="xs muted" style="margin-top:4px">tot turbine ${x.t.i + 1}${tip ? ` · ${(x.dT / tip).toLocaleString('nl-NL', { maximumFractionDigits: 1 })}× tiphoogte` : ''}${mods.includes('elek') ? [x.dK != null ? ` · kabel ${fmtM(x.dK)}` : '', x.dL != null ? ` · hoogspanningslijn ${fmtM(x.dL)}` : '', x.dS != null ? ` · onderstation ${fmtM(x.dS)}` : ''].join('') : ''}</div>`;
+          if (mods.includes('infra')) {
+            const r = infraHits(x.dT);
+            html += `<div class="hm-mod">Geluid</div>` + (r.steun.length ? `<ul class="anchors">${r.steun.map(y => `<li>● ${esc(y.a.label)} – ${cite(y)}</li>`).join('')}</ul>` : '<p class="xs muted" style="margin:4px 0 0">Buiten de afstanden van de woonstudies met een nadelig effect. Infrageluid reikt volgens recent onderzoek wel verder dan modellen voorspellen (Mattsson et al., 2026).</p>') +
+              (r.verweer.length ? `<details class="xs" style="margin-top:6px"><summary class="muted">Verwacht verweer (${r.verweer.length})</summary><ul class="anchors">${r.verweer.map(y => `<li class="contra">${esc(y.a.label)} – ${cite(y)}</li>`).join('')}</ul></details>` : '');
+          }
+          if (mods.includes('elek')) {
+            const gs = elekHits(x);
+            html += `<div class="hm-mod">Vervuilde elektriciteit <label class="xs" style="font-weight:400;margin-left:6px"><input type="checkbox" data-vee="${x.i}" ${x.h.vee ? 'checked' : ''}> dieren / veehouderij</label></div>` +
+              (gs.length ? gs.map(g => `<div class="xs" style="margin-top:6px"><b>${capF(OBJ[g.obj])}${g.obj !== 'vee' ? ' · ' + fmtM(g.d) : ''}</b></div><ul class="anchors">${g.steun.map(y => `<li>● ${esc(y.a.label)} – ${cite(y)} ${prBadge(y.s)}</li>`).join('')}</ul>${g.verweer.length ? `<details class="xs"><summary class="muted">Verwacht verweer (${g.verweer.length})</summary><ul class="anchors">${g.verweer.map(y => `<li class="contra">${esc(y.a.label)} – ${cite(y)}</li>`).join('')}</ul></details>` : ''}`).join('') : '<p class="xs muted" style="margin:4px 0 0">Geen specifiek onderzoek voor deze situatie.</p>');
+          }
+          return html + '</div>';
         }).join('') : '<div class="empty small">Plaats nu de woningen.</div>');
-      const u = $('#useDist'); if (u) u.onclick = () => { st.project.afstand = String(Math.round(list[0].n.d)); st.project.tiphoogte = $('#tip').value; st.project.aantal = String(st.map.turbines.length); save(); toast('Afstand opgeslagen in projectgegevens'); };
+      const u = $('#useDist'); if (u) u.onclick = () => { st.project.afstand = String(Math.round(list[0].dT)); st.project.tiphoogte = $('#tip').value; st.project.aantal = String(st.map.turbines.length); save(); toast('Afstand opgeslagen in projectgegevens'); };
       $$('[data-hname]', box).forEach(inp => inp.addEventListener('change', e => { st.map.homes[+e.target.dataset.hname].naam = e.target.value; save(); draw(); }));
-      $$('[data-htext]', box).forEach(b => b.addEventListener('click', () => { const x = list.find(l => l.i === +b.dataset.htext); const p = Object.assign({}, st.project, { tiphoogte: $('#tip').value, aantal: String(st.map.turbines.length) }); copy(`${x.h.naam}: ` + lokaleAlinea(p, x.n.d)); }));
+      $$('[data-vee]', box).forEach(c => c.addEventListener('change', e => { st.map.homes[+e.target.dataset.vee].vee = e.target.checked; save(); draw(); }));
     }
     map.on('click', e => {
       const ll = [e.latlng.lat, e.latlng.lng];
-      if (mode === 'turbine') st.map.turbines.push(ll); else st.map.homes.push({ ll, naam: `Woning ${st.map.homes.length + 1}` });
+      if (mode === 'turbine') st.map.turbines.push(ll);
+      else if (mode === 'home') st.map.homes.push({ ll, naam: `Woning ${st.map.homes.length + 1}` });
+      else if (mode === 'station') st.map.stations.push(ll);
+      else if (mode === 'kabel' || mode === 'lijn') { if (!activeLine || activeLine.type !== mode) { activeLine = { type: mode, pts: [] }; st.map.lines.push(activeLine); } activeLine.pts.push(ll); drawModes(); }
       save(); draw();
     });
     map.on('moveend', () => { const c = map.getCenter(); st.map.center = [c.lat, c.lng]; st.map.zoom = map.getZoom(); save(); });
-    $$('[data-mode]').forEach(b => b.addEventListener('click', () => { mode = b.dataset.mode; $$('[data-mode]').forEach(x => x.classList.toggle('on', x === b)); }));
+    $('#kmods').addEventListener('click', e => { const b = e.target.closest('[data-km]'); if (!b) return; toggleIn(st.map.mods, b.dataset.km); b.classList.toggle('on'); b.setAttribute('aria-pressed', b.classList.contains('on')); save(); activeLine = null; drawModes(); draw(); });
     $('#tip').addEventListener('change', e => { st.project.tiphoogte = e.target.value; save(); drawHomes(); });
-    $('#clearMap').onclick = () => { if (confirm('Alle turbines en woningen van de kaart wissen?')) { st.map.turbines = []; st.map.homes = []; save(); draw(); } };
+    $('#clearMap').onclick = () => { if (confirm('Alle turbines, woningen, kabels en onderstations van de kaart wissen?')) { st.map.turbines = []; st.map.homes = []; st.map.lines = []; st.map.stations = []; activeLine = null; save(); drawModes(); draw(); } };
+    const copyK = kind => { if (!homesSorted().length) { toast('Plaats eerst turbines en woningen'); return; } if (!kmods().length) { toast('Kies eerst welk onderzoek je wilt tonen'); return; } const t = kaartTekst(kind); st.kaartTekst = Object.assign(st.kaartTekst || {}, { [kind]: t, datum: new Date().toISOString() }); save(); copy(t); };
+    $('#kZw').onclick = () => copyK('zienswijze');
+    $('#kBe').onclick = () => copyK('beroep');
+    $('#kRap').onclick = () => { if (!kmods().length) { toast('Kies eerst welk onderzoek je wilt tonen'); return; } buildKaartRapport(map).catch(err => { console.error(err); toast('Rapport maken mislukt'); }); };
     // PDOK geocoder
     let gt; const sug = $('#sug');
     $('#geo').addEventListener('input', e => {
@@ -676,7 +919,7 @@
       }, 250);
     });
     sug.addEventListener('click', e => { const b = e.target.closest('[data-ll]'); if (!b) return; const [la, lo] = b.dataset.ll.split(',').map(Number); map.setView([la, lo], /adres/.test(b.dataset.type) ? 17 : 14); sug.hidden = true; $('#geo').value = b.textContent; });
-    draw();
+    drawModes(); draw();
     setTimeout(() => map.invalidateSize(), 50);
   }
 
