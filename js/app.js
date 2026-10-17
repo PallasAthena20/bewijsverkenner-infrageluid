@@ -796,8 +796,33 @@
         });
       }
     });
+    if (isI) {
+      const SA = INFRA_ARGS.filter(a => /^s_/.test(a.id));
+      if (SA.length) {
+        k.push(H('Nachtelijk geluid en slaap', HeadingLevel.HEADING_1));
+        k.push(P('De onderstaande argumenten gelden voor alle woningen op de kaart, ongeacht de afstand. Ze steunen op peer-reviewed onderzoek naar nachtelijk omgevingsgeluid en slaap, waaronder de systematische review voor de WHO-richtlijnen. Dat onderzoek gaat vaak over verkeersgeluid; per argument staat in een doorredenering waarom het ook relevant is voor nachtelijk windturbinegeluid.'));
+        const cite = ids => { const ss = (ids || []).map(get).filter(Boolean); ss.forEach(reg); return ss.length ? ' (' + ss.map(z => `${z.auteurs.replace(/ et al\.?$/, '')}${/et al/.test(z.auteurs) ? ' et al.' : ''}, ${z.jaar || 'z.j.'}`).join('; ') + ')' : ''; };
+        SA.forEach(a => {
+          k.push(H(`${a.titel} (bewijs: ${a.sterkte.toLowerCase()})`, HeadingLevel.HEADING_2));
+          k.push(P(a.kern));
+          const R = a.redenering || {};
+          if ((R.stappen || []).length) {
+            k.push(new Paragraph({ children: [T('Doorredenering', { bold: true })], spacing: { before: 60, after: 60 } }));
+            R.stappen.forEach((t, i) => k.push(new Paragraph({ spacing: { after: 50 }, indent: { left: 360, hanging: 260 }, children: [T(`${i + 1}. `, { bold: true }), T(t.t.replace(/\.$/, '') + cite(t.ids) + '.')] })));
+            if (R.dus) k.push(new Paragraph({ spacing: { before: 60, after: 80 }, children: [T('Dus: ', { bold: true }), T(R.dus)] }));
+            if (R.let_op) k.push(new Paragraph({ spacing: { after: 80 }, children: [T('Let op: ', { bold: true, color: '5F636B' }), T(R.let_op, { color: '5F636B' })] }));
+          }
+          const top = (a.steun || []).map(y => ({ y, s: get(y.id) })).filter(z => z.s && prOf(z.s) === 'peer').slice(0, 3);
+          if (top.length) {
+            k.push(new Paragraph({ children: [T('Belangrijkste onderzoek', { bold: true })], spacing: { before: 60, after: 60 } }));
+            top.forEach(z => k.push(B(`${reg(z.s).auteurs} (${z.s.jaar || 'z.j.'}): `, z.y.punt)));
+          }
+          (a.extern || []).forEach(e => k.push(new Paragraph({ bullet: { level: 0 }, spacing: { after: 60 }, children: [T(e.label + ' – ')].concat([new ExternalHyperlink({ link: e.url, children: [T(e.url, { color: '1F3A5F', underline: {} })] })]) })));
+        });
+      }
+    }
     k.push(H('Toelichting', HeadingLevel.HEADING_1));
-    if (isI) k.push(P('Geluid: de afstanden zijn gekoppeld aan woonstudies uit de database van peer-reviewed onderzoek naar infrageluid, laagfrequent geluid en gezondheid. Een studie wordt bij een woning genoemd als de woning binnen de afstand ligt waarop die studie effecten vond.'));
+    if (isI) k.push(P('Geluid: de afstanden zijn gekoppeld aan woonstudies uit de database van peer-reviewed onderzoek naar infrageluid, laagfrequent geluid en gezondheid. Een studie wordt bij een woning genoemd als de woning binnen de afstand ligt waarop die studie effecten vond. De argumenten over nachtelijk geluid en slaap zijn niet aan een afstand gekoppeld en gelden voor alle woningen.'));
     if (isE) k.push(P('Vervuilde elektriciteit: afstandsgrenzen zijn gebruikt als een studie die zelf noemt. Onderzoek over ondergrondse kabels wordt getoond tot 50 m van het tracé; dat is een keuze van deze tool, omdat het onderzoek alleen ‘vlak bij’ de kabel noemt. Vuile stroom en zwerfstroom verspreiden zich via het elektriciteitsnet en de grond; afstand alleen is daarom geen garantie. Bij bronnen die niet (aantoonbaar) peer-reviewed zijn, staat dat vermeld. Het bewijs voor gezondheidseffecten van vuile stroom is beperkt en omstreden.'));
     k.push(P('Dit rapport is een hulpmiddel en geen juridisch advies. Controleer de oorspronkelijke publicaties voordat je citeert.', { children: [T('Dit rapport is een hulpmiddel en geen juridisch advies. Controleer de oorspronkelijke publicaties voordat je citeert.', { size: 19, color: '5F636B' })] }));
     if (isI) { const mt = INFRA_S.find(s => /mattsson/i.test(s.auteurs) && s.jaar === 2026); if (mt) reg(mt); }
