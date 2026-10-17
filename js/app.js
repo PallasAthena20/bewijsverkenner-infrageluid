@@ -19,7 +19,8 @@
     dierstudie_mechanisme: 'Dierstudies en mechanismen', blootstelling_meting: 'Blootstelling en metingen', therapie_positief: 'Therapie (positief effect)',
     emissie_bron: 'Akoestiek: bron en emissie', verspreiding: 'Akoestiek: verspreiding en weer', binnenshuis: 'Akoestiek: binnenshuis en gebouwen',
     waarneming: 'Akoestiek: waarneming en gehoordrempel', normen: 'Akoestiek: normen en weging', rekenmodellen: 'Akoestiek: rekenmodellen',
-    meetmethoden: 'Akoestiek: meetmethoden', geluidskarakter: 'Akoestiek: pulsering en tonen', trillingen: 'Akoestiek: trillingen'
+    meetmethoden: 'Akoestiek: meetmethoden', geluidskarakter: 'Akoestiek: pulsering en tonen', trillingen: 'Akoestiek: trillingen',
+    omgevingsgeluid: 'Omgevingsgeluid (verkeer, industrie)', gewenning: 'Gewenning aan geluid'
   };
   const THEMES_ELEK = {
     vuile_stroom: 'Vervuilde elektriciteit (transiënten)', zwerfstroom: 'Zwerfstroom en aardstroom', windturbine_elek: 'Windturbines en windparken',
@@ -28,9 +29,9 @@
   };
   let THEMES = THEMES_INFRA;
   const ALL_THEMES = Object.assign({}, THEMES_INFRA, THEMES_ELEK);
-  const SOORT = { gezondheid: 'Gezondheidsonderzoek', algemeen: 'Algemeen onderzoek (akoestiek)', elek: 'Vervuilde elektriciteit' };
-  const SOORT_INFRA = { gezondheid: SOORT.gezondheid, algemeen: SOORT.algemeen };
-  const nG = INFRA_S.filter(s => s.soort === 'algemeen').length, nH = INFRA_S.length - nG;
+  const SOORT = { gezondheid: 'Gezondheidsonderzoek', slaap: 'Omgevingsgeluid en slaap', algemeen: 'Algemeen onderzoek (akoestiek)', elek: 'Vervuilde elektriciteit' };
+  const SOORT_INFRA = { gezondheid: SOORT.gezondheid, slaap: SOORT.slaap, algemeen: SOORT.algemeen };
+  const nG = INFRA_S.filter(s => s.soort === 'algemeen').length, nS = INFRA_S.filter(s => s.soort === 'slaap').length, nH = INFRA_S.length - nG - nS;
   const PR = { peer: ['Peer-reviewed', 'pr-peer', 'Verschenen in een wetenschappelijk tijdschrift met peer review.'], onzeker: ['Peer review onduidelijk', 'pr-onz', 'Congresbijdrage, repository of tijdschrift waarvan de peer review niet vaststaat.'], niet: ['Niet peer-reviewed', 'pr-niet', 'Website, rapport, proefschrift, boek of krantenartikel.'] };
   const prOf = s => s.pr || 'peer';
   const prBadge = s => { const p = PR[prOf(s)]; return `<span class="badge ${p[1]}" title="${esc(p[2])}">${p[0]}</span>`; };
@@ -146,7 +147,7 @@
   function renderStart() {
     const peerE = ELEK_S.filter(s => prOf(s) === 'peer').length;
     const tiles = [
-      ['#/infra', 'Module', 'Infrageluid en laagfrequent geluid', `${nH} studies over gezondheid en ${nG} over akoestiek, ${INFRA_ARGS.length} argumenten, verweer en eigen argument.`, ''],
+      ['#/infra', 'Module', 'Infrageluid en laagfrequent geluid', `${nH} studies over gezondheid, ${nS} over omgevingsgeluid en slaap en ${nG} over akoestiek, ${INFRA_ARGS.length} argumenten, verweer en eigen argument.`, ''],
       ['#/elek', 'Module · nieuw', 'Vervuilde elektriciteit', `${ELEK_S.length} bronnen over vuile stroom, zwerfstroom, netkwaliteit, magneetvelden en elektrogevoeligheid (${peerE} peer-reviewed), ${ELEK_ARGS.length} argumenten en eigen argument.`, ''],
       ['#/kaart', 'Hulpmiddel', 'Kaart en afstand', 'Zet turbines en woningen op de kaart en zie welk onderzoek bij die afstand past.', ''],
       ['#/export', 'Hulpmiddel', 'Export naar Word', 'Bundel argumenten uit alle modules in één bijlage met literatuurlijst.', ''],
@@ -170,7 +171,7 @@
       <div>
         <div class="eyebrow">Peer-reviewed onderzoek 2000–2026</div>
         <h1>Onderbouw je zienswijze of beroep met de wetenschap over infrageluid en laagfrequent geluid</h1>
-        <p class="lead">${nH} studies over gezondheid, ${nG} studies over de akoestiek van infrageluid en laagfrequent geluid, ${ARGS.length} uitgewerkte argumenten tegen windturbineprojecten, voorbereide weerleggingen, een module om je eigen argument te toetsen en een Word-export die je direct kunt indienen.</p>
+        <p class="lead">${nH} studies over gezondheid, ${nS} studies over omgevingsgeluid en slaap, ${nG} studies over de akoestiek van infrageluid en laagfrequent geluid, ${ARGS.length} uitgewerkte argumenten tegen windturbineprojecten, voorbereide weerleggingen, een module om je eigen argument te toetsen en een Word-export die je direct kunt indienen.</p>
         <div class="btn-row" style="margin-top:1.5rem"><a class="btn btn-primary" href="${MB}argumenten">Naar de argumentbouwer</a><a class="btn" href="${MB}argumenten/eigen">Eigen argument toetsen</a><a class="btn" href="#/kaart">Afstand tot woningen bepalen</a></div>
       </div>
       <div class="card">
@@ -249,7 +250,7 @@
     const sel = st.studies.includes(String(s.id));
     const facts = [['Niveau', s.niveau], ['Frequentie', s.frequentie], ['Duur', s.duur], ['N', s.n], ['Afstand', s.afstand]].filter(f => f[1] && !/^(onbekend|n\.v\.t\.|niet vermeld)/i.test(f[1]));
     return `<article class="study">
-      <div class="meta">${relBadge(s.relevantie, s)} ${dirBadge(s.richting)} ${prBadge(s)} ${s.soort === 'algemeen' ? '<span class="badge dir-none">akoestiek</span>' : ''} ${s.kern ? (s.soort === 'elek' ? '<span class="badge kern" title="Gebruikt in de argumenten van deze module">in argument</span>' : '<span class="badge kern" title="Nagelezen tegen het abstract">kernstudie</span>') : ''} <span class="yr">${s.jaar || 'z.j.'}</span> <span class="xs muted">${esc(s.studietype || '')}</span></div>
+      <div class="meta">${relBadge(s.relevantie, s)} ${dirBadge(s.richting)} ${prBadge(s)} ${s.soort === 'algemeen' ? '<span class="badge dir-none">akoestiek</span>' : s.soort === 'slaap' ? '<span class="badge dir-none">slaap</span>' : ''} ${s.kern ? (s.soort === 'elek' ? '<span class="badge kern" title="Gebruikt in de argumenten van deze module">in argument</span>' : '<span class="badge kern" title="Nagelezen tegen het abstract">kernstudie</span>') : ''} <span class="yr">${s.jaar || 'z.j.'}</span> <span class="xs muted">${esc(s.studietype || '')}</span></div>
       <h3>${esc(s.titel)}</h3>
       <div class="src">${esc(s.auteurs)} · ${esc(s.tijdschrift)}${s.land && s.land !== 'onbekend' ? ' · ' + esc(s.land) : ''}</div>
       <p class="find">${esc(s.bevinding)}</p>
@@ -268,7 +269,7 @@
     const types = [...new Set(S.map(s => s.studietype).filter(Boolean))].sort();
     const exps = [...new Set(S.map(s => s.blootstelling).filter(Boolean))].sort();
     main.innerHTML = `
-      <div class="page-head"><div><div class="eyebrow">${esc(M.naam)}</div><h1>Studies zoeken</h1><p>${isE ? `Zoek in ${S.length} bronnen over vervuilde elektriciteit: ${S.filter(s => prOf(s) === 'peer').length} peer-reviewed, ${S.filter(s => prOf(s) === 'onzeker').length} met onduidelijke peer review en ${S.filter(s => prOf(s) === 'niet').length} niet peer-reviewed. Filter op peer review, onderwerp, relevantie en richting.` : `Zoek in ${S.length} peer-reviewed studies: ${nH} over gezondheid en ${nG} algemene studies over de akoestiek van infrageluid en laagfrequent geluid. Combineer soort onderzoek, onderwerpen, relevantie en richting.`}</p></div>
+      <div class="page-head"><div><div class="eyebrow">${esc(M.naam)}</div><h1>Studies zoeken</h1><p>${isE ? `Zoek in ${S.length} bronnen over vervuilde elektriciteit: ${S.filter(s => prOf(s) === 'peer').length} peer-reviewed, ${S.filter(s => prOf(s) === 'onzeker').length} met onduidelijke peer review en ${S.filter(s => prOf(s) === 'niet').length} niet peer-reviewed. Filter op peer review, onderwerp, relevantie en richting.` : `Zoek in ${S.length} peer-reviewed studies: ${nH} over gezondheid, ${nS} over omgevingsgeluid en slaap (zoals de WHO-review) en ${nG} algemene studies over de akoestiek van infrageluid en laagfrequent geluid. Combineer soort onderzoek, onderwerpen, relevantie en richting.`}</p></div>
       <a class="btn btn-sm" href="${MB}studies?reset">Filters wissen</a></div>
       <div class="layout-filter">
         <aside class="filters" aria-label="Filters">
@@ -316,7 +317,7 @@
       <p class="muted small">${esc(s.auteurs)} (${s.jaar || 'z.j.'}) · ${esc(s.tijdschrift)}</p>
       <p>${esc(s.bevinding)}</p>
       <dl class="kv">
-        <dt>Soort</dt><dd>${esc(SOORT[s.soort || 'gezondheid'])}${s.soort === 'algemeen' ? ' – geen gezondheidsuitkomst; bruikbaar als schakel in een redenering' : ''}</dd>
+        <dt>Soort</dt><dd>${esc(SOORT[s.soort || 'gezondheid'])}${s.soort === 'algemeen' ? ' – geen gezondheidsuitkomst; bruikbaar als schakel in een redenering' : s.soort === 'slaap' ? ' – onderzoek naar omgevingsgeluid (vaak verkeer); bruikbaar als schakel in een redenering over nachtelijk windturbinegeluid' : ''}${s.bron ? '</dd><dt>Geluidsbron</dt><dd>' + esc(s.bron) : ''}</dd>
         <dt>Relevantie</dt><dd>${esc(relOf(s)[s.relevantie].label)}. ${esc(s.relevantie_reden || '')}</dd>
         <dt>Studietype</dt><dd>${esc(s.studietype)}</dd><dt>Blootstelling</dt><dd>${esc(s.blootstelling)}</dd>
         <dt>Populatie</dt><dd>${esc(s.populatie)}</dd><dt>Uitkomst</dt><dd>${esc(s.uitkomst)}</dd>
@@ -342,7 +343,7 @@
     main.innerHTML = `
       <div class="page-head"><div><div class="eyebrow">${esc(M.naam)}</div><h1>Relevantie voor windturbines</h1><p>Elke studie heeft een label A, B of C, ${M.key === 'elek' ? 'op basis van de mate waarin de bron over windturbines, woningen of boerderijen gaat' : 'op basis van de bron van het geluid, het niveau ten opzichte van woonsituaties, de onderzochte groep en het studietype'}. Klik op een getal om de studies te zien.</p></div></div>
       <div class="grid grid-3">${['A', 'B', 'C'].map(r => `<a class="card kpi mod-card" href="${MB}studies?reset&rel=${r}"><div style="display:flex;justify-content:space-between;align-items:center">${relBadge(r)}<span class="num">${cnt(r).length}</span></div><div class="lbl"><b>${REL[r].short}</b> · ${cnt(r).filter(s => isNeg(s.richting)).length} met nadelig of gemengd effect</div><p>${REL[r].uitleg}</p></a>`).join('')}</div>
-      ${M.key === 'elek' ? `<div class="section note">Let op: veel bronnen in deze module meten de blootstelling (netkwaliteit, velden, zwerfstroom) en geen gezondheidsuitkomst. Ze onderbouwen de schakels in je redenering. Bij elke bron staat of die peer-reviewed is; <a href="${MB}studies?reset&pr=peer">bekijk alleen peer-reviewed bronnen</a>.</div>` : `<div class="section note">Naast gezondheidsonderzoek bevat de database ${nG} algemene studies over de akoestiek (bron, verspreiding, binnenshuis, gehoordrempel, normen, trillingen). Die meten geen gezondheidseffect, maar onderbouwen de logische schakels in je redenering. <a href="${MB}studies?reset&soort=algemeen">Bekijk het algemene onderzoek</a>.</div>`}
+      ${M.key === 'elek' ? `<div class="section note">Let op: veel bronnen in deze module meten de blootstelling (netkwaliteit, velden, zwerfstroom) en geen gezondheidsuitkomst. Ze onderbouwen de schakels in je redenering. Bij elke bron staat of die peer-reviewed is; <a href="${MB}studies?reset&pr=peer">bekijk alleen peer-reviewed bronnen</a>.</div>` : `<div class="section note">Naast gezondheidsonderzoek bevat de database ${nG} algemene studies over de akoestiek (bron, verspreiding, binnenshuis, gehoordrempel, normen, trillingen). Die meten geen gezondheidseffect, maar onderbouwen de logische schakels in je redenering. <a href="${MB}studies?reset&soort=algemeen">Bekijk het algemene onderzoek</a>. Daarnaast zijn er ${nS} studies over omgevingsgeluid en slaap, zoals de WHO-review; <a href="${MB}studies?reset&soort=slaap">bekijk het slaaponderzoek</a>.</div>`}
       <div class="section card"><h2>Per onderwerp</h2><p class="small muted">Aantal studies per onderwerp en relevantielabel. Tussen haakjes: hoeveel daarvan een nadelig of gemengd effect vinden.</p>
         <div class="table-wrap"><table><thead><tr><th>Onderwerp</th><th class="num">A – direct</th><th class="num">B – indirect</th><th class="num">C – achtergrond</th></tr></thead>
         <tbody>${rows.map(r => `<tr><td>${THEMES[r.t]}</td><td class="num">${cell(r.A, 'A', r.t)}</td><td class="num">${cell(r.B, 'B', r.t)}</td><td class="num">${cell(r.C, 'C', r.t)}</td></tr>`).join('')}</tbody></table></div></div>
@@ -352,7 +353,7 @@
   /* ---------- ARGUMENTEN ---------- */
   const GROEP_ELEK = { windturbines: ['Windturbines en windparken', 'Argumenten die direct gaan over ervaringen en metingen bij windparken, en over maatregelen en nulmetingen die je kunt eisen.'], gezondheid: ['Gezondheid van mens en dier', 'Argumenten die steunen op onderzoek naar vuile stroom, zwerfstroom, magneetvelden en elektrogevoeligheid. Het bewijs is deels omstreden; de sterkte staat bij elk argument.'], techniek: ['Techniek en normen: de logische schakels', 'Argumenten over de vervuiling die omvormers en kabels veroorzaken en over de hiaten in de normen. Ze bewijzen geen gezondheidsschade, maar laten zien dat de blootstelling niet goed is geregeld.'] };
   let GROEP;
-  const GROEP_INFRA = { gezondheid: ['Gezondheidseffecten', 'Argumenten die steunen op onderzoek naar gezondheid en hinder.'], blootstelling: ['Blootstelling en akoestiek: de logische schakels', 'Argumenten die steunen op algemeen onderzoek naar infrageluid en laagfrequent geluid: bron, verspreiding, nacht, binnenshuis, gehoordrempel, normen en rekenmodellen. Ze bewijzen geen gezondheidsschade, maar laten zien dat de blootstelling groter is dan de norm veronderstelt.'] };
+  const GROEP_INFRA = { gezondheid: ['Gezondheidseffecten', 'Argumenten die steunen op onderzoek naar gezondheid en hinder.'], blootstelling: ['Blootstelling en akoestiek: de logische schakels', 'Argumenten die steunen op algemeen onderzoek naar infrageluid en laagfrequent geluid: bron, verspreiding, nacht, binnenshuis, gehoordrempel, normen en rekenmodellen. Ze bewijzen geen gezondheidsschade, maar laten zien dat de blootstelling groter is dan de norm veronderstelt.'], slaap: ['Omgevingsgeluid en slaap: doorredeneren', 'Argumenten op basis van het brede onderzoek naar nachtelijk omgevingsgeluid en slaap, zoals de WHO-review. Dat onderzoek gaat meestal over verkeer; elk argument laat stap voor stap zien waarom het ook voor nachtelijk windturbinegeluid geldt.'] };
   function renderArgumenten(rest) {
     if (rest[0] === 'eigen') return renderEigen(rest[1]);
     if (rest[0]) return renderArgument(rest[0]);
@@ -379,7 +380,10 @@
   // trefwoorden (Nederlands en Engels) per begrip, gekoppeld aan onderwerpen en argumenten
   let LEX;
   const LEX_INFRA = [
-    { w: ['slaap', 'slapen', 'wakker', 'ontwak', 'insomn', 'slapeloos', 'sleep', 'nacht', 'night', 'rem', 'slaapmedicatie'], th: ['slaap'], args: ['slaap', 'nacht'] },
+    { w: ['slaap', 'slapen', 'wakker', 'ontwak', 'insomn', 'slapeloos', 'sleep', 'nacht', 'night', 'rem', 'slaapmedicatie'], th: ['slaap'], args: ['slaap', 'nacht', 's_who', 's_onbewust', 's_nachtnorm'] },
+    { w: ['wennen', 'gewend', 'gewenning', 'habituat'], th: ['gewenning'], args: ['s_gewenning'] },
+    { w: ['piek', 'pieken', 'ritme', 'gemiddeld', 'lden', 'lnight', 'nachtnorm', 'who'], th: ['slaap'], args: ['s_pieken', 's_nachtnorm'] },
+    { w: ['slaappil', 'slaapmiddel', 'slaapmedicatie', 'slaaptekort', 'moe', 'vermoeid'], th: ['slaap'], args: ['s_gezondheid', 'slaap'] },
     { w: ['hinder', 'last', 'ergernis', 'annoy', 'irritat', 'overlast', 'storend'], th: ['hinder'], args: ['hinder', 'pulserend', 'dba'] },
     { w: ['hart', 'bloeddruk', 'boezemfibril', 'hartslag', 'cardio', 'heart', 'vaat', 'vaten', 'blood pressure'], th: ['hart_en_vaten'], args: ['hart'] },
     { w: ['stress', 'cortisol', 'hormoon', 'spanning'], th: ['stress_hormonen'], args: ['stress'] },
@@ -558,6 +562,7 @@
             <div class="btn-row" style="margin-top:12px"><button class="btn btn-sm" data-copy="tb">Kopieer tekst</button><button class="btn btn-sm" id="copyRefs">Kopieer met literatuurlijst</button></div>
             ${lok || M.key !== 'infra' ? '' : `<p class="xs muted" style="margin-top:12px">Tip: vul bij <a href="#/export">Export</a> of via de <a href="#/kaart">Kaart</a> de projectgegevens in. Dan wordt hier automatisch een alinea over de afstand tot woningen toegevoegd.</p>`}
           </div>
+          ${a.redenering ? redCard(a.redenering) : ''}
           <div class="section"><h2>Onderbouwing</h2><ul class="evidence">${a.steun.map(x => evidenceItem(x)).join('')}</ul>
             ${a.extern && a.extern.length ? `<p class="extern" style="margin-top:12px"><b>Aanvullende bronnen:</b> ${a.extern.map(e => `<a href="${esc(e.url)}" target="_blank" rel="noopener">${esc(e.label)}</a>`).join(' · ')}</p>` : ''}</div>
         </div>
@@ -570,7 +575,19 @@
       </div>
       <div class="section btn-row" style="justify-content:space-between">${prev ? `<a class="btn" href="${MB}argumenten/${prev.id}">← ${esc(prev.titel)}</a>` : '<span></span>'}${next ? `<a class="btn" href="${MB}argumenten/${next.id}">${esc(next.titel)} →</a>` : ''}</div>`;
     $('#argSel').onclick = () => { const on = toggleIn(st.args, a.id); save(); const b = $('#argSel'); b.classList.toggle('on', on); b.classList.toggle('btn-primary', !on); b.textContent = on ? '✓ In selectie voor export' : '+ Opnemen in export'; toast(on ? 'Argument opgenomen in export' : 'Argument verwijderd uit export'); };
+    if ($('#copyRed')) $('#copyRed').onclick = () => copy(redPlain(a.redenering));
     $('#copyRefs').onclick = () => { const refs = argRefs(a).map(fullCite).join('\n'); copy($('#tb').innerText + '\n\nLiteratuur\n' + refs); };
+  }
+  const citeIds = ids => { const c = (ids || []).map(get).filter(Boolean).map(shortCite); return c.length ? ` (${c.join('; ')})` : ''; };
+  const stapCite = x => x.ids && x.ids.length ? x.t.replace(/\.$/, '') + citeIds(x.ids) + '.' : x.t;
+  const redPlain = r => 'Doorredenering:\n' + r.stappen.map((x, k) => `${k + 1}. ${stapCite(x)}`).join('\n') + `\nDus: ${r.dus}`;
+  function redCard(r) {
+    return `<div class="card section red-card"><h2>Doorredenering</h2><p class="small muted" style="margin-bottom:10px">Stap voor stap: van wat onderzoek aantoont naar wat het betekent voor dit windturbineproject.</p>
+      <ol class="red-steps">${r.stappen.map(x => `<li><div>${esc(x.t)}</div>${x.ids.length ? `<div class="xs muted" style="margin-top:4px">${x.ids.map(get).filter(Boolean).map(s => `<button class="cell-btn" data-detail="${s.id}">${esc(s.auteurs)} (${s.jaar || 'z.j.'})</button>`).join(', ')}</div>` : ''}</li>`).join('')}</ol>
+      <div class="red-dus"><b>Dus:</b> ${esc(r.dus)}</div>
+      ${r.let_op ? `<p class="small" style="margin-top:10px"><b>Let op:</b> ${esc(r.let_op)}</p>` : ''}
+      <div id="redTxt" hidden>${esc(redPlain(r))}</div>
+      <div class="btn-row" style="margin-top:12px"><button class="btn btn-sm" id="copyRed">Kopieer doorredenering</button></div></div>`;
   }
   function argRefs(a) {
     const ids = []; a.steun.forEach(x => ids.push(String(x.id)));
@@ -954,6 +971,7 @@
           <div class="card"><h2>Opties</h2>
             <ul class="list-check">
               <li><input type="checkbox" id="o_ver" checked><label for="o_ver">Per argument het verwachte verweer en de weerlegging opnemen</label></li>
+              <li><input type="checkbox" id="o_red" checked><label for="o_red">Doorredenering opnemen (stap voor stap, met conclusie)</label></li>
               <li><input type="checkbox" id="o_tab" checked><label for="o_tab">Tabel met kernbevindingen</label></li>
               <li><input type="checkbox" id="o_lit" checked><label for="o_lit">Literatuurlijst</label></li>
               <li><input type="checkbox" id="o_met" checked><label for="o_met">Verantwoording van de methode</label></li>
@@ -979,15 +997,15 @@
     $('#cpAll').onclick = () => copy(buildPlain(opts()));
     sum();
   }
-  const opts = () => ({ ver: $('#o_ver').checked, tab: $('#o_tab').checked, lit: $('#o_lit').checked, met: $('#o_met').checked });
-  function exportModel() {
+  const opts = () => ({ red: $('#o_red').checked, ver: $('#o_ver').checked, tab: $('#o_tab').checked, lit: $('#o_lit').checked, met: $('#o_met').checked });
+  function exportModel(o = {}) {
     const args = ALL_ARGS.filter(a => st.args.includes(a.id));
     const vers = st.verweer.map(k => { const [md, i] = String(k).split(':'); const v = MODS[md] && MODS[md].VERWEER[+i]; return v ? Object.assign({ mod: md }, v) : null; }).filter(Boolean);
     const eigen = st.eigen.map(e => ({ id: 'eigen', mod: e.mod || 'infra', titel: e.titel, sterkte: 'Eigen argument', sterkte_uitleg: 'Door indiener geformuleerd en onderbouwd met de hieronder genoemde studies.', tekst: e.tekst || e.eigen, steun: e.steun.map(id => { const s = get(id); return s ? { id, punt: puntVoor(s) } : null; }).filter(Boolean), verweer: e.verweer || [], extern: [] }));
     args.push(...eigen);
     args.sort((a, b) => (a.mod === 'infra' ? 0 : 1) - (b.mod === 'infra' ? 0 : 1));
     const ids = new Set();
-    args.forEach(a => { a.steun.forEach(x => ids.add(String(x.id))); a.verweer.forEach(v => v.studies.forEach(s => ids.add(String(s)))); });
+    args.forEach(a => { a.steun.forEach(x => ids.add(String(x.id))); a.verweer.forEach(v => v.studies.forEach(s => ids.add(String(s)))); if (o.red && a.redenering) a.redenering.stappen.forEach(x => x.ids.forEach(i => ids.add(String(i)))); });
     vers.forEach(v => { v.ids.forEach(i => ids.add(String(i))); (v.refs_extra || []).forEach(i => ids.add(String(i))); });
     st.studies.forEach(i => ids.add(String(i)));
     const refs = [...ids].map(get).filter(Boolean).sort((a, b) => a.auteurs.localeCompare(b.auteurs) || (a.jaar || 0) - (b.jaar || 0));
@@ -997,15 +1015,16 @@
     return { args, vers, refs, extern, lok: lokaleAlinea(st.project), p: st.project, mods };
   }
   const METHODE_ELEK = () => 'Voor de module vervuilde elektriciteit is in OpenAlex en een academische zoekindex gezocht naar publicaties uit de periode 1970–2026 over vuile stroom (hoogfrequente spanningstransiënten), zwerfstroom en aardstroom, elektromagnetische velden en netkwaliteit rond windturbines, supraharmonischen (2–150 kHz), elektrogevoeligheid, middenfrequente velden en magneetvelden van kabels, transformatoren en onderstations. Ook websites, rapporten en krantenartikelen zijn opgenomen als ze direct over windturbines gaan. Van ruim 2.300 gevonden records zijn er ' + ELEK_S.length + ' opgenomen. Bij elke bron is aangegeven of die peer-reviewed is (artikel in een wetenschappelijk tijdschrift), of de peer review onduidelijk is (congresbijdrage, repository) of ontbreekt (website, rapport, proefschrift, boek, krantenartikel). De samenvattingen zijn gebaseerd op het abstract; bij bronnen zonder abstract alleen op de titel en beschrijving. Het bewijs voor gezondheidseffecten van vuile stroom is beperkt en wetenschappelijk omstreden; dat is bij elk argument in de sterkte tot uitdrukking gebracht.';
-  const METHODE = 'De onderbouwing is gebaseerd op een systematische zoektocht naar peer-reviewed publicaties uit de periode 2000–2026 over infrageluid, laagfrequent geluid en windturbinegeluid in relatie tot gezondheid. Er is gezocht in PubMed en in een academische zoekindex; de peer-reviewstatus is gecontroleerd via PubMed, Crossref of Semantic Scholar. Van ruim 2.100 gevonden publicaties voldeden er ' + nH + ' aan de criteria. Daarnaast is in OpenAlex en een academische zoekindex gezocht naar algemeen akoestisch onderzoek naar infrageluid en laagfrequent geluid (bron, verspreiding, binnenshuis, waarneming, normen, rekenmodellen en trillingen); daarvan zijn ' + nG + ' tijdschriftartikelen opgenomen. Dit algemene onderzoek meet geen gezondheidseffect, maar onderbouwt de schakels tussen turbine en blootstelling. Elke studie is ingedeeld naar relevantie voor windturbines (A: direct relevant, B: indirect relevant, C: achtergrond). De kernstudies waarop de argumenten steunen, zijn nagelezen aan de hand van het abstract. Voor de volledige inhoud wordt verwezen naar de oorspronkelijke publicaties.';
+  const METHODE = 'De onderbouwing is gebaseerd op een systematische zoektocht naar peer-reviewed publicaties uit de periode 2000–2026 over infrageluid, laagfrequent geluid en windturbinegeluid in relatie tot gezondheid. Er is gezocht in PubMed en in een academische zoekindex; de peer-reviewstatus is gecontroleerd via PubMed, Crossref of Semantic Scholar. Van ruim 2.100 gevonden publicaties voldeden er ' + nH + ' aan de criteria. Daarnaast is in OpenAlex en een academische zoekindex gezocht naar algemeen akoestisch onderzoek naar infrageluid en laagfrequent geluid (bron, verspreiding, binnenshuis, waarneming, normen, rekenmodellen en trillingen); daarvan zijn ' + nG + ' tijdschriftartikelen opgenomen. Dit algemene onderzoek meet geen gezondheidseffect, maar onderbouwt de schakels tussen turbine en blootstelling. Verder is in OpenAlex gezocht naar peer-reviewed tijdschriftartikelen uit 2000–2026 over omgevingsgeluid (verkeer, industrie, windturbines) en slaap, waaronder de systematische review voor de WHO-richtlijnen (Basner & McGuire, 2018) en de update daarvan (Smith et al., 2022). Van ruim 2.700 gevonden records zijn er ' + nS + ' opgenomen. Dit onderzoek gaat meestal over verkeersgeluid; in de argumenten wordt in een doorredenering stap voor stap uitgelegd waarom het ook relevant is voor nachtelijk windturbinegeluid, en waar de redenering onzeker is. Elke studie is ingedeeld naar relevantie voor windturbines (A: direct relevant, B: indirect relevant, C: achtergrond). De kernstudies waarop de argumenten steunen, zijn nagelezen aan de hand van het abstract. Voor de volledige inhoud wordt verwezen naar de oorspronkelijke publicaties.';
   function buildPlain(o) {
-    const m = exportModel(); const L = [];
+    const m = exportModel(o); const L = [];
     L.push('BIJLAGE: WETENSCHAPPELIJKE ONDERBOUWING BEZWAREN TEGEN WINDTURBINES');
     if (m.mods.length) L.push('Onderwerpen: ' + m.mods.map(md => md.naam.toLowerCase()).join('; '));
     if (m.p.naam) L.push('Project: ' + m.p.naam); if (m.p.gezag) L.push('Bevoegd gezag: ' + m.p.gezag);
     L.push('');
     m.args.forEach((a, i) => {
       L.push(`${i + 1}. ${a.titel}`); L.push(a.tekst); if (m.lok && a.mod === 'infra') L.push(m.lok);
+      if (o.red && a.redenering) L.push(redPlain(a.redenering));
       if (o.ver) a.verweer.forEach(v => L.push(`Mogelijk verweer: ${v.claim}\nWeerlegging: ${v.weerlegging}`));
       L.push('');
     });
@@ -1016,7 +1035,7 @@
   }
   async function buildDocx(o) {
     if (!window.docx) { toast('Word-module niet geladen'); return; }
-    const m = exportModel();
+    const m = exportModel(o);
     if (!m.args.length && !m.vers.length && !m.refs.length) { toast('Selecteer eerst argumenten of studies'); return; }
     const { Document, Packer, Paragraph, TextRun, HeadingLevel, Table, TableRow, TableCell, WidthType, ExternalHyperlink, AlignmentType, ShadingType } = window.docx;
     const P = (text, opt = {}) => new Paragraph(Object.assign({ children: [new TextRun({ text, size: 22, font: 'Calibri' })], spacing: { after: 160, line: 300 } }, opt));
@@ -1037,6 +1056,7 @@
         kids.push(P(a.tekst));
         if (m.lok && a.mod === 'infra') kids.push(P(m.lok));
         kids.push(new Paragraph({ children: [new TextRun({ text: 'Onderbouwing', bold: true, size: 22, font: 'Calibri' })], spacing: { before: 120, after: 80 } }));
+        if (o.red && a.redenering) { const r = a.redenering; kids.push(new Paragraph({ children: [new TextRun({ text: 'Doorredenering', bold: true, size: 22, font: 'Calibri' })], spacing: { before: 120, after: 80 } })); r.stappen.forEach((x, k) => kids.push(new Paragraph({ indent: { left: 360, hanging: 360 }, children: [new TextRun({ text: `${k + 1}. `, bold: true, size: 21, font: 'Calibri' }), new TextRun({ text: stapCite(x), size: 21, font: 'Calibri' })], spacing: { after: 60 } }))); kids.push(new Paragraph({ children: [new TextRun({ text: 'Dus: ', bold: true, size: 21, font: 'Calibri' }), new TextRun({ text: r.dus, size: 21, font: 'Calibri' })], spacing: { after: 60 } })); if (r.let_op) kids.push(small('Let op: ' + r.let_op)); }
         a.steun.forEach(x => { const s = get(x.id); if (s) kids.push(new Paragraph({ bullet: { level: 0 }, children: [new TextRun({ text: `${s.auteurs} (${s.jaar || 'z.j.'}): `, bold: true, size: 21, font: 'Calibri' }), new TextRun({ text: x.punt, size: 21, font: 'Calibri' })], spacing: { after: 60 } })); });
         if (o.ver && a.verweer.length) {
           kids.push(new Paragraph({ children: [new TextRun({ text: 'Verwacht verweer en weerlegging', bold: true, size: 22, font: 'Calibri' })], spacing: { before: 160, after: 80 } }));

@@ -250,3 +250,7 @@ textarea{line-height:1.55;font-size:var(--text-base)}
 .hm-mod{margin-top:10px;padding-top:8px;border-top:1px solid var(--border);font-weight:700;font-size:var(--text-sm);color:var(--accent)}
 .home-n{flex:none;width:24px;height:24px;border-radius:50%;background:var(--accent);color:var(--surface);display:inline-flex;align-items:center;justify-content:center;font-size:12px;font-weight:700}
 [data-theme="dark"] .home-n{color:#10151C}
+.red-card{border-left:4px solid var(--accent)}
+.red-steps{margin:0;padding-left:1.4em;display:flex;flex-direction:column;gap:var(--s3)}
+.red-steps li{padding-left:4px}
+.red-dus{margin-top:var(--s4);padding:var(--s3) var(--s4);border-radius:8px;background:var(--accent-soft);border:1px solid var(--border)}
