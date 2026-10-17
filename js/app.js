@@ -149,7 +149,7 @@
     const tiles = [
       ['#/infra', 'Module', 'Infrageluid en laagfrequent geluid', `${nH} studies over gezondheid, ${nS} over omgevingsgeluid en slaap en ${nG} over akoestiek, ${INFRA_ARGS.length} argumenten, verweer en eigen argument.`, ''],
       ['#/elek', 'Module · nieuw', 'Vervuilde elektriciteit', `${ELEK_S.length} bronnen over vuile stroom, zwerfstroom, netkwaliteit, magneetvelden en elektrogevoeligheid (${peerE} peer-reviewed), ${ELEK_ARGS.length} argumenten en eigen argument.`, ''],
-      ['#/kaart', 'Hulpmiddel', 'Kaart en afstand', 'Zet turbines en woningen op de kaart en zie welk onderzoek bij die afstand past.', ''],
+      ['#/kaart', 'Hulpmiddel', 'Kaart en afstand', 'Zet turbines en woningen op de kaart en zie welk onderzoek bij die afstand past, plus de argumenten over nachtelijk geluid en slaap.', ''],
       ['#/export', 'Hulpmiddel', 'Export naar Word', 'Bundel argumenten uit alle modules in één bijlage met literatuurlijst.', ''],
       ['', 'Binnenkort', 'Zienswijzebouwer', 'Stel stap voor stap een complete zienswijze samen uit de gekozen argumenten.', 'soon'],
       ['', 'Binnenkort', 'Beroepschriftbouwer', 'Zet je zienswijze om in een beroepschrift met de juiste opbouw.', 'soon']
@@ -177,16 +177,17 @@
       <div class="card">
         <h2>Zo werkt het</h2>
         <ol class="steps">
-          <li><div><a href="#/kaart">Kaart</a>: zet de geplande turbines en woningen neer. De app berekent de afstanden en toont welk onderzoek bij die afstand past.</div></li>
+          <li><div><a href="#/kaart">Kaart</a>: zet de geplande turbines en woningen neer. De app berekent de afstanden en toont welk onderzoek bij die afstand past, plus de argumenten over nachtelijk geluid en slaap.</div></li>
           <li><div><a href="${MB}argumenten">Argumenten</a>: kies de argumenten die bij jouw situatie passen, of schrijf <a href="${MB}argumenten/eigen">je eigen argument</a> en laat de app onderbouwing, verweer en weerlegging zoeken.</div></li>
           <li><div><a href="${MB}verweer">Verweer</a>: bereid je voor op de studies die de initiatiefnemer aanhaalt.</div></li>
           <li><div><a href="#/export">Export</a>: download een Word-bijlage met tekst, onderbouwing en literatuurlijst.</div></li>
         </ol>
       </div>
     </section>
-    <div class="grid grid-3">
+    <div class="grid grid-4">
       <div class="card kpi"><div class="num">${nA}</div><div class="lbl">studies direct relevant voor windturbines</div><p>${nNegA} daarvan vinden een nadelig of gemengd effect.</p></div>
       <div class="card kpi"><div class="num">${nG}</div><div class="lbl">studies algemeen onderzoek (akoestiek)</div><p>Bron, verspreiding, nacht, binnenshuis, gehoordrempel en normen: de logische schakels tussen turbine en gezondheid.</p></div>
+      <a class="card kpi" href="${MB}studies?reset&soort=slaap" style="text-decoration:none;color:inherit"><div class="num">${nS}</div><div class="lbl">studies omgevingsgeluid en slaap</div><p>Waaronder de WHO-review. Basis voor ${INFRA_ARGS.filter(a => /^s_/.test(a.id)).length} slaapargumenten; ook in de kaart en het kaartrapport.</p></a>
       <div class="card kpi"><div class="num">${ARGS.filter(a => a.sterkte === 'Sterk').length}</div><div class="lbl">argumenten met sterk bewijs</div><p>Hinder, langetermijnonzekerheid en voorzorg vormen de kern van een sterke zienswijze.</p></div>
     </div>
     <div class="section grid grid-3">
@@ -663,6 +664,7 @@
     });
     return groups;
   }
+  const SLAAP_ARGS = () => INFRA_ARGS.filter(a => /^s_/.test(a.id));
   const kmods = () => mapState().mods.filter(m => m !== 'bpa');
   const homesSorted = () => st.map.homes.map((h, i) => Object.assign(homeInfo(h), { i })).filter(x => x.t).sort((a, b) => a.dT - b.dT);
   function distZin(x, tip) {
@@ -698,6 +700,11 @@
       }
     });
     L.push('');
+    if (kmods().includes('infra')) {
+      L.push('Nachtelijk geluid en slaap (geldt voor alle bovengenoemde woningen, ongeacht de afstand):');
+      SLAAP_ARGS().forEach(a => { const top = (a.steun || []).map(y => get(y.id)).filter(z => z && prOf(z) === 'peer').slice(0, 2); L.push(`- ${a.titel}. ${a.kern}${top.length ? ' (' + top.map(c).join('; ') + ')' : ''}`); });
+      L.push('');
+    }
     if (kmods().includes('elek')) L.push('Vuile stroom en zwerfstroom verspreiden zich via het elektriciteitsnet en de grond. Afstand alleen is daarom geen garantie; alleen een onafhankelijke meting vóór en na de bouw kan uitwijzen of woningen en stallen worden getroffen.');
     L.push(kind === 'beroep'
       ? 'Appellant voert aan dat het bestreden besluit niet zorgvuldig is voorbereid en onvoldoende is gemotiveerd, omdat niet per woning is onderzocht en gemotiveerd waarom de gezondheidsrisico’s op deze afstanden aanvaardbaar zijn, en het hierboven genoemde onderzoek daarbij niet kenbaar is betrokken (artikelen 3:2 en 3:46 Awb).'
@@ -841,7 +848,7 @@
   function renderKaart() {
     mapState();
     main.innerHTML = `
-      <div class="page-head"><div><div class="eyebrow">Hulpmiddel · alle modules</div><h1>Kaart: afstand tot woningen</h1><p>Kies welk onderzoek je wilt zien, zoek een adres en klik op de kaart om turbines, woningen en bij vervuilde elektriciteit ook kabels en een onderstation te plaatsen. Per woning zie je de afstand en het onderzoek dat daarbij past, van dichtbij naar veraf.</p></div></div>
+      <div class="page-head"><div><div class="eyebrow">Hulpmiddel · alle modules</div><h1>Kaart: afstand tot woningen</h1><p>Kies welk onderzoek je wilt zien, zoek een adres en klik op de kaart om turbines, woningen en bij vervuilde elektriciteit ook kabels en een onderstation te plaatsen. Per woning zie je de afstand en het onderzoek dat daarbij past, van dichtbij naar veraf. Bij Geluid zie je ook de argumenten over nachtelijk geluid en slaap, die voor alle woningen gelden.</p></div></div>
       <div class="kaart-bar">
         <div class="field"><span class="lbl">Onderzoek tonen</span><div class="chips" id="kmods">${KMODS.map(([k, l]) => k === 'bpa' ? `<button class="chip" disabled title="Deze module wordt later gebouwd">${l}</button>` : `<button class="chip ${st.map.mods.includes(k) ? 'on' : ''}" data-km="${k}" aria-pressed="${st.map.mods.includes(k)}">${l}</button>`).join('')}</div></div>
         <div class="field"><span class="lbl">Gebruiken</span><div class="btn-row"><button class="btn btn-sm" id="kZw">Kopieer naar zienswijze</button><button class="btn btn-sm" id="kBe">Kopieer naar beroepschrift</button><button class="btn btn-sm btn-primary" id="kRap">Rapport maken (Word)</button></div></div>
@@ -912,12 +919,14 @@
       if (!mods.length) { box.innerHTML = '<div class="empty">Kies bovenaan welk onderzoek je wilt zien.</div>'; return; }
       const list = homesSorted();
       box.innerHTML = `<div class="card" style="padding:16px;margin-bottom:12px"><b>${st.map.turbines.length}</b> turbine${st.map.turbines.length === 1 ? '' : 's'} · <b>${st.map.homes.length}</b> woning${st.map.homes.length === 1 ? '' : 'en'}${mods.includes('elek') ? ` · <b>${st.map.lines.length}</b> lijn${st.map.lines.length === 1 ? '' : 'en'} · <b>${st.map.stations.length}</b> onderstation${st.map.stations.length === 1 ? '' : 's'}` : ''}<div class="xs muted" style="margin-top:4px">Gesorteerd van dichtbij naar veraf.</div>${list.length ? `<div class="btn-row" style="margin-top:10px"><button class="btn btn-sm" id="useDist">Gebruik ${fmtM(list[0].dT)} in projectgegevens</button></div>` : ''}</div>` +
+        (mods.includes('infra') ? `<div class="card slaap-card" style="padding:16px;margin-bottom:12px"><div class="hm-mod" style="margin-top:0;padding-top:0;border-top:0">Nachtelijk geluid en slaap</div><p class="xs muted" style="margin:4px 0 8px">Geldt voor alle woningen, ongeacht de afstand. Gebaseerd op peer-reviewed onderzoek naar omgevingsgeluid en slaap, waaronder de WHO-review. Staat ook in het rapport en de kopieertekst.</p><ul class="anchors">${SLAAP_ARGS().map(a => `<li>● <a href="#/infra/argumenten/${a.id}">${esc(a.titel)}</a> <span class="xs muted">(${esc(a.sterkte.toLowerCase())})</span></li>`).join('')}</ul></div>` : '') +
         (list.length ? list.map((x, n) => {
           let html = `<div class="home-item"><div style="display:flex;justify-content:space-between;align-items:baseline;gap:8px"><span class="home-n">${n + 1}</span><input type="text" value="${esc(x.h.naam)}" data-hname="${x.i}" aria-label="Naam woning" style="flex:1;min-width:0"><span class="dist">${fmtM(x.dT)}</span></div>
             <div class="xs muted" style="margin-top:4px">tot turbine ${x.t.i + 1}${tip ? ` · ${(x.dT / tip).toLocaleString('nl-NL', { maximumFractionDigits: 1 })}× tiphoogte` : ''}${mods.includes('elek') ? [x.dK != null ? ` · kabel ${fmtM(x.dK)}` : '', x.dL != null ? ` · hoogspanningslijn ${fmtM(x.dL)}` : '', x.dS != null ? ` · onderstation ${fmtM(x.dS)}` : ''].join('') : ''}</div>`;
           if (mods.includes('infra')) {
             const r = infraHits(x.dT);
             html += `<div class="hm-mod">Geluid</div>` + (r.steun.length ? `<ul class="anchors">${r.steun.map(y => `<li>● ${esc(y.a.label)} – ${cite(y)}</li>`).join('')}</ul>` : '<p class="xs muted" style="margin:4px 0 0">Buiten de afstanden van de woonstudies met een nadelig effect. Infrageluid reikt volgens recent onderzoek wel verder dan modellen voorspellen (Mattsson et al., 2026).</p>') +
+              `<p class="xs muted" style="margin:6px 0 0">Slaap: de ${SLAAP_ARGS().length} argumenten over nachtelijk geluid gelden ook voor deze woning.</p>` +
               (r.verweer.length ? `<details class="xs" style="margin-top:6px"><summary class="muted">Verwacht verweer (${r.verweer.length})</summary><ul class="anchors">${r.verweer.map(y => `<li class="contra">${esc(y.a.label)} – ${cite(y)}</li>`).join('')}</ul></details>` : '');
           }
           if (mods.includes('elek')) {

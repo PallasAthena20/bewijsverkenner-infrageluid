@@ -58,6 +58,9 @@ main{max-width:1240px;margin:0 auto;padding:var(--s6) var(--s5) var(--s7)}
 .card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:var(--s5);box-shadow:var(--shadow)}
 .grid{display:grid;gap:var(--s4)}
 .grid-3{grid-template-columns:repeat(3,minmax(0,1fr))}
+.grid-4{grid-template-columns:repeat(4,minmax(0,1fr))}
+@media (max-width:1100px){.grid-4{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media (max-width:600px){.grid-4{grid-template-columns:1fr}}
 .grid-2{grid-template-columns:repeat(2,minmax(0,1fr))}
 @media (max-width:900px){.grid-3,.grid-2{grid-template-columns:1fr}}
 
