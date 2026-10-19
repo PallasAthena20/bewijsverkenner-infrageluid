@@ -783,15 +783,17 @@
     k.push(new Paragraph({ children: [T(`Kaart: T = windturbine (rood), W1, W2 enz. = woningen (blauw), genummerd van dichtbij naar veraf, ringen op 500 m, 1, 1,5 en 2 km${isE ? '; paarse stippellijn = ondergrondse kabel, gele lijn = hoogspanningslijn (HS-lijn), paars vierkant = onderstation' : ''}. Afstanden zijn hemelsbreed.`, { size: 18, color: '5F636B' })], spacing: { after: 200 } }));
     k.push(H('Overzicht van dichtbij naar veraf', HeadingLevel.HEADING_1));
     const cell = (t, bold, fill, w) => new TableCell({ width: { size: w, type: WidthType.PERCENTAGE }, shading: fill ? { type: ShadingType.CLEAR, color: 'auto', fill } : undefined, margins: { top: 50, bottom: 50, left: 80, right: 80 }, children: [new Paragraph({ children: [T(t || '–', { bold, size: 18, color: fill ? 'FFFFFF' : undefined })] })] });
-    const hdr = ['Nr.', 'Woning', 'Turbine', tip ? '× tiphoogte' : null, isE ? 'Kabel' : null, isE ? 'HS-lijn' : null, isE ? 'Onderstation' : null, 'Studies'].filter(Boolean);
+    const hdr = ['Nr.', 'Woning', 'Turbine', tip ? '× tiphoogte' : null, isE ? 'Kabel' : null, isE ? 'HS-lijn' : null, isE ? 'Onderstation' : null, isI ? 'Studies wind­turbines' : 'Studies', isI ? 'Studies slaap en gezondheid' : null].filter(Boolean);
+    const nSG = isI ? slaapGezondheid().B.length : 0;
     const cw = Math.floor(100 / hdr.length);
     const rows = [new TableRow({ tableHeader: true, children: hdr.map(h => cell(h, true, '1F3A5F', cw)) })];
     list.forEach((x, n) => {
       const ns = (isI ? infraHits(x.dT).steun.length : 0) + (isE ? elekHits(x).flatMap(g => g.steun).length : 0);
-      const v = ['W' + (n + 1), x.h.naam, fmtM(x.dT), tip ? (x.dT / tip).toLocaleString('nl-NL', { maximumFractionDigits: 1 }) + '×' : null, isE ? (x.dK != null ? fmtM(x.dK) : '–') : null, isE ? (x.dL != null ? fmtM(x.dL) : '–') : null, isE ? (x.dS != null ? fmtM(x.dS) : '–') : null, String(ns)].filter(y => y !== null);
+      const v = ['W' + (n + 1), x.h.naam, fmtM(x.dT), tip ? (x.dT / tip).toLocaleString('nl-NL', { maximumFractionDigits: 1 }) + '×' : null, isE ? (x.dK != null ? fmtM(x.dK) : '–') : null, isE ? (x.dL != null ? fmtM(x.dL) : '–') : null, isE ? (x.dS != null ? fmtM(x.dS) : '–') : null, String(ns), isI ? String(nSG) : null].filter(y => y !== null);
       rows.push(new TableRow({ children: v.map((t, j) => cell(t, j < 2, null, cw)) }));
     });
     k.push(new Table({ width: { size: 100, type: WidthType.PERCENTAGE }, rows }));
+    if (isI) k.push(new Paragraph({ spacing: { before: 80, after: 120 }, children: [T(`Studies windturbines: onderzoek bij omwonenden dat nadelige effecten vond binnen deze afstand. Studies slaap en gezondheid: ${nSG} peer-reviewed studies die slaapverstoring door omgevingsgeluid in verband brengen met aantasting van de gezondheid; dit geldt voor elke woning, ongeacht de afstand. Zie het hoofdstuk ‘Onderzoek naar slaapverstoring, geluid en gezondheid’.`, { size: 18, color: '5F636B' })] }));
     k.push(H('Per woning', HeadingLevel.HEADING_1));
     list.forEach((x, n) => {
       k.push(H(`W${n + 1} · ${x.h.naam} – ${fmtM(x.dT)}`, HeadingLevel.HEADING_2));
