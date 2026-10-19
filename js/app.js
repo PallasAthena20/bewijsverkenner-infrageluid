@@ -776,8 +776,8 @@
   function docToPdf(doc) {
     const col = c => c ? '#' + c : undefined;
     const run = r => {
-      if (r.t === 'a') return (r.o.children || []).map(c => Object.assign(run(c), { link: r.o.link, color: '#1F3A5F', decoration: 'underline' }));
-      const o = r.o, x = { text: o.text || '' };
+      if (r.t === 'a') return (r.o.children || []).map(c => { const v = run(c); v.text = v.text.replace(/^https?:\/\//, ''); return Object.assign(v, { link: r.o.link, color: '#1F3A5F', decoration: 'underline' }); });
+      const o = r.o, x = { text: (o.text || '').replace(/\u00AD/g, '') };
       if (o.bold) x.bold = true; if (o.italics) x.italics = true; if (o.size) x.fontSize = o.size / 2; if (o.color) x.color = col(o.color);
       if (o.underline) x.decoration = 'underline';
       return x;
@@ -827,14 +827,23 @@
       pageBreakBefore: (node, after) => !!node.headlineLevel && (after.length === 0 || (node.startPosition && node.startPosition.top > (node.headlineLevel === 1 ? 700 : 730)))
     };
   }
-  async function buildKaartRapport(map, fmt = 'docx') {
-    if (fmt === 'pdf') { try { await ensurePdfMake(); } catch (e) { toast('PDF-module niet geladen'); return; } }
+  let JR = new Map();
+  function setJR(ids) {
+    JR = new Map(); const g = new Map();
+    [...new Set(ids.map(String))].map(get).filter(Boolean).forEach(x => { const key = x.auteurs + '|' + x.jaar; if (!g.has(key)) g.set(key, []); g.get(key).push(x); });
+    g.forEach(arr => { if (arr.length > 1) arr.sort((p, q) => p.titel.localeCompare(q.titel)).forEach((x, n) => JR.set(String(x.id), String.fromCharCode(97 + n))); });
+  }
+  function jr(z) { return (z.jaar || 'z.j.') + (JR.get(String(z.id)) || ''); }
+  async function buildKaartRapport(map, fmt = 'docx', dry = false) {
+    if (!dry) { JR = new Map(); setJR(await buildKaartRapport(map, fmt, true) || []); }
+    if (dry) { /* eerste ronde: alleen verzamelen welke studies genoemd worden */ }
+    else if (fmt === 'pdf') { try { await ensurePdfMake(); } catch (e) { toast('PDF-module niet geladen'); return; } }
     else if (!window.docx) { toast('Word-module niet geladen'); return; }
     const list = homesSorted();
     if (!list.length) { toast('Plaats eerst turbines en woningen'); return; }
-    toast('Rapport wordt gemaakt…');
-    const img = await mapImage(map);
-    const { Document, Packer, Paragraph, TextRun, HeadingLevel, Table, TableRow, TableCell, WidthType, ExternalHyperlink, ShadingType, ImageRun, AlignmentType } = fmt === 'pdf' ? PDFSHIM : window.docx;
+    if (!dry) toast('Rapport wordt gemaakt…');
+    const img = dry ? { url: '', w: 4, h: 3 } : await mapImage(map);
+    const { Document, Packer, Paragraph, TextRun, HeadingLevel, Table, TableRow, TableCell, WidthType, ExternalHyperlink, ShadingType, ImageRun, AlignmentType } = fmt === 'pdf' || dry ? PDFSHIM : window.docx;
     const T = (text, o = {}) => new TextRun(Object.assign({ text, size: 21, font: 'Optima' }, o));
     const P = (text, o = {}) => new Paragraph(Object.assign({ children: [T(text)], spacing: { after: 140, line: 290 } }, o));
     const H = (text, level) => new Paragraph({ text, heading: level, spacing: { before: 260, after: 110 } });
@@ -869,9 +878,9 @@
       if (isI) {
         const r = infraHits(x.dT);
         k.push(new Paragraph({ children: [T('Geluid: onderzoek dat bij deze afstand nadelige effecten vond', { bold: true })], spacing: { before: 80, after: 60 } }));
-        if (r.steun.length) r.steun.forEach(y => k.push(B(`${reg(y.s).auteurs} (${y.s.jaar || 'z.j.'}): `, y.a.label + '.')));
+        if (r.steun.length) r.steun.forEach(y => k.push(B(`${reg(y.s).auteurs} (${jr(y.s)}): `, y.a.label + '.')));
         else k.push(P('Deze afstand valt buiten de afstanden van de woonstudies met een nadelig effect. Recent onderzoek wijst er wel op dat infrageluid verder reikt dan rekenmodellen voorspellen (Mattsson et al., 2026).'));
-        if (r.verweer.length) { k.push(new Paragraph({ children: [T('Verwacht verweer bij deze afstand', { bold: true, color: '5F636B' })], spacing: { before: 80, after: 60 } })); r.verweer.forEach(y => k.push(B(`${reg(y.s).auteurs} (${y.s.jaar || 'z.j.'}): `, y.a.label + '.', true))); }
+        if (r.verweer.length) { k.push(new Paragraph({ children: [T('Verwacht verweer bij deze afstand', { bold: true, color: '5F636B' })], spacing: { before: 80, after: 60 } })); r.verweer.forEach(y => k.push(B(`${reg(y.s).auteurs} (${jr(y.s)}): `, y.a.label + '.', true))); }
         const wb = get('S967'), sm = INFRA_S.find(z => z.soort === 'slaap' && /^Smith/.test(z.auteurs) && z.jaar === 2022 && /update|systematic/i.test(z.titel));
         const sc = [wb, sm].filter(Boolean).map(z => { regS(z); return `${z.auteurs}, ${z.jaar}`; });
         k.push(new Paragraph({ spacing: { before: 100, after: 140, line: 290 }, shading: { type: ShadingType.CLEAR, color: 'auto', fill: 'EEF2F7' }, children: [T('Slaapverstoring door omgevingsgeluid: ', { bold: true }), T(`ook van toepassing op deze woning. Nachtelijk omgevingsgeluid verstoort aantoonbaar de slaap${sc.length ? ' (' + sc.join('; ') + ')' : ''}. De WHO adviseert ’s nachts buiten maximaal 40 dB (Lnight). Zie het hoofdstuk ‘Nachtelijk geluid en slaap’ en de onderzoekslijst aan het einde van dit rapport.`)] }));
@@ -882,8 +891,8 @@
         if (!gs.length) k.push(P('Geen specifiek onderzoek gevonden voor deze situatie.'));
         gs.forEach(g => {
           k.push(new Paragraph({ children: [T(`${capF(OBJ[g.obj])}${g.obj !== 'vee' ? ' (' + fmtM(g.d) + ')' : ''}`, { italics: false, bold: true, size: 20, color: '6B4BA1' })], spacing: { before: 40, after: 40 } }));
-          g.steun.forEach(y => k.push(B(`${reg(y.s).auteurs} (${y.s.jaar || 'z.j.'})${prNote(y.s)}: `, y.a.label + '.')));
-          g.verweer.forEach(y => k.push(B(`Verwacht verweer – ${reg(y.s).auteurs} (${y.s.jaar || 'z.j.'}): `, y.a.label + '.', true)));
+          g.steun.forEach(y => k.push(B(`${reg(y.s).auteurs} (${jr(y.s)})${prNote(y.s)}: `, y.a.label + '.')));
+          g.verweer.forEach(y => k.push(B(`Verwacht verweer – ${reg(y.s).auteurs} (${jr(y.s)}): `, y.a.label + '.', true)));
         });
       }
     });
@@ -892,7 +901,7 @@
       if (SA.length) {
         k.push(H('Nachtelijk geluid en slaap', HeadingLevel.HEADING_1));
         k.push(P('De onderstaande argumenten gelden voor alle woningen op de kaart, ongeacht de afstand. Ze steunen op peer-reviewed onderzoek naar nachtelijk omgevingsgeluid en slaap, waaronder de systematische review voor de WHO-richtlijnen. Dat onderzoek gaat vaak over verkeersgeluid; per argument staat in een doorredenering waarom het ook relevant is voor nachtelijk windturbinegeluid.'));
-        const cite = ids => { const ss = (ids || []).map(get).filter(Boolean); ss.forEach(regS); return ss.length ? ' (' + ss.map(z => `${z.auteurs.replace(/ et al\.?$/, '')}${/et al/.test(z.auteurs) ? ' et al.' : ''}, ${z.jaar || 'z.j.'}`).join('; ') + ')' : ''; };
+        const cite = ids => { const ss = (ids || []).map(get).filter(Boolean); ss.forEach(regS); return ss.length ? ' (' + ss.map(z => `${z.auteurs.replace(/ et al\.?$/, '')}${/et al/.test(z.auteurs) ? ' et al.' : ''}, ${jr(z)}`).join('; ') + ')' : ''; };
         SA.forEach(a => {
           k.push(H(`${a.titel} (bewijs: ${a.sterkte.toLowerCase()})`, HeadingLevel.HEADING_2));
           k.push(P(a.kern));
@@ -906,7 +915,7 @@
           const top = (a.steun || []).map(y => ({ y, s: get(y.id) })).filter(z => z.s && prOf(z.s) === 'peer').slice(0, 3);
           if (top.length) {
             k.push(new Paragraph({ children: [T('Belangrijkste onderzoek', { bold: true })], spacing: { before: 60, after: 60 } }));
-            top.forEach(z => k.push(B(`${regS(z.s).auteurs} (${z.s.jaar || 'z.j.'}): `, z.y.punt)));
+            top.forEach(z => k.push(B(`${regS(z.s).auteurs} (${jr(z.s)}): `, z.y.punt)));
           (a.steun || []).map(y => get(y.id)).filter(z => z && prOf(z) === 'peer').forEach(regS);
           }
           (a.extern || []).forEach(e => k.push(new Paragraph({ bullet: { level: 0 }, spacing: { after: 60 }, children: [T(e.label + ' – ')].concat([new ExternalHyperlink({ link: e.url, children: [T(e.url, { color: '1F3A5F', underline: {} })] })]) })));
@@ -920,7 +929,7 @@
     if (isI) { const mt = INFRA_S.find(s => /mattsson/i.test(s.auteurs) && s.jaar === 2026); if (mt) reg(mt); }
     const litItem = s => {
       const url = s.doi && !/^\d+$/.test(s.doi) ? `https://doi.org/${s.doi}` : s.link;
-      k.push(new Paragraph({ spacing: { after: 90 }, indent: { left: 360, hanging: 360 }, children: [T(`${s.auteurs} (${s.jaar || 'z.j.'}). ${s.titel.replace(/\.$/, '')}. ${s.tijdschrift && s.tijdschrift !== 'n.a.' ? s.tijdschrift + '. ' : ''}${prNote(s) ? prNote(s).trim() + ' ' : ''}`, { size: 19 })].concat(url ? [new ExternalHyperlink({ link: url, children: [T(url, { size: 19, color: '1F3A5F', underline: {} })] })] : []) }));
+      k.push(new Paragraph({ spacing: { after: 90 }, indent: { left: 360, hanging: 360 }, children: [T(`${s.auteurs} (${jr(s)}). ${s.titel.replace(/\.$/, '')}. ${s.tijdschrift && s.tijdschrift !== 'n.a.' ? s.tijdschrift + '. ' : ''}${prNote(s) ? prNote(s).trim() + ' ' : ''}`, { size: 19 })].concat(url ? [new ExternalHyperlink({ link: url, children: [T(url, { size: 19, color: '1F3A5F', underline: {} })] })] : []) }));
     };
     const byAut = (a, b) => a.auteurs.localeCompare(b.auteurs) || (a.jaar || 0) - (b.jaar || 0);
     if (isI) slaapGezondheid().A.concat(slaapGezondheid().B).forEach(regS);
@@ -930,7 +939,7 @@
     if (isI) {
       const { A: SA2, B: SB2 } = slaapGezondheid();
       SA2.concat(SB2).forEach(regS);
-      const kc = z => `${z.auteurs} (${z.jaar || 'z.j.'})`;
+      const kc = z => `${z.auteurs} (${jr(z)})`;
       k.push(H('Onderzoek naar slaapverstoring, geluid en gezondheid', HeadingLevel.HEADING_1));
       k.push(P(`Dit hoofdstuk geldt voor alle woningen in dit rapport. De tabel zet twee soorten peer-reviewed onderzoek naast elkaar dat een duidelijk nadelig verband vond. Links: ${SA2.length} studies naar windturbinegeluid, infrageluid en laagfrequent geluid met slaap als uitkomst. Rechts: ${SB2.length} studies naar omgevingsgeluid (vooral verkeer) die slaapverstoring in verband brengen met gezondheid, zoals hart en bloedvaten, stress en psychische gezondheid. Studies staan op volgorde van bewijskracht: eerst systematische reviews en cohortstudies, daarna experimenten, veldstudies, vragenlijststudies en overzichtsartikelen.`));
       const n2 = Math.max(SA2.length, SB2.length);
@@ -952,6 +961,7 @@
       [...sRefs.values()].sort(byAut).forEach(litItem);
     }
     const doc = new Document({ creator: 'Bewijsverkenner windturbines', title: 'Rapport kaart: afstand tot woningen', styles: { default: { document: { run: { font: 'Optima', size: 21 } } }, paragraphStyles: [{ id: 'Heading1', name: 'Heading 1', basedOn: 'Normal', next: 'Normal', run: { size: 28, bold: true, color: '1F3A5F', font: 'Optima' } }, { id: 'Heading2', name: 'Heading 2', basedOn: 'Normal', next: 'Normal', run: { size: 24, bold: true, color: '1E2430', font: 'Optima' } }] }, sections: [{ properties: { page: { margin: { top: 1100, bottom: 1100, left: 1100, right: 1100 } } }, children: k }] });
+    if (dry) return [...refs.keys(), ...sRefs.keys()];
     const fnm = `Rapport_kaart${st.project.naam ? '_' + st.project.naam.replace(/[^\w-]+/g, '_') : ''}`;
     if (fmt === 'pdf') {
       const pm = window.pdfMake;
