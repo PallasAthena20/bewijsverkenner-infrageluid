@@ -10,6 +10,16 @@
   const ALL_S = INFRA_S.concat(ELEK_S);
   const byId = new Map(ALL_S.map(s => [String(s.id), s]));
   const get = id => byId.get(String(id));
+  const APPV = '20261019g';
+  // Automatisch bijwerken: als de site een nieuwere versie heeft dan deze pagina, herlaad dan één keer.
+  (function versieCheck() {
+    const chk = () => fetch('version.txt?t=' + Date.now(), { cache: 'no-store' }).then(r => r.ok ? r.text() : null).then(v => {
+      v = (v || '').trim(); if (!v || v === APPV) return;
+      const k = 'bv-reload-' + v; if (sessionStorage.getItem(k)) return; sessionStorage.setItem(k, '1');
+      const u = new URL(location.href); u.searchParams.set('r', v); location.replace(u.toString());
+    }).catch(() => {});
+    chk(); setInterval(chk, 5 * 60 * 1000); document.addEventListener('visibilitychange', () => { if (!document.hidden) chk(); });
+  })();
 
   const THEMES_INFRA = {
     slaap: 'Slaap', hart_en_vaten: 'Hart en vaten', hinder: 'Hinder', binnenoor_evenwicht: 'Binnenoor en evenwicht',
@@ -826,7 +836,7 @@
       pageSize: 'A4', pageMargins: [55, 50, 55, 55],
       defaultStyle: { font: 'Biolinum', fontSize: 10.5, color: '#1E2430' },
       content: kids,
-      footer: (cur, tot) => ({ columns: [{ text: 'Bewijsverkenner windturbines – rapport kaart', color: '#8A8F98', fontSize: 8 }, { text: `Pagina ${cur} van ${tot}`, alignment: 'right', color: '#8A8F98', fontSize: 8 }], margin: [55, 20, 55, 0] }),
+      footer: (cur, tot) => ({ columns: [{ text: 'Bewijsverkenner windturbines – rapport kaart · versie ' + APPV, color: '#8A8F98', fontSize: 8 }, { text: `Pagina ${cur} van ${tot}`, alignment: 'right', color: '#8A8F98', fontSize: 8 }], margin: [55, 20, 55, 0] }),
       pageBreakBefore: (node, after) => !!node.headlineLevel && (after.length === 0 || (node.startPosition && node.startPosition.top > (node.headlineLevel === 1 ? 700 : 730)))
     };
   }
