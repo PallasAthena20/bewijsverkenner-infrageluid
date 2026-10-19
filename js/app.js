@@ -783,29 +783,32 @@
       return x;
     };
     const runs = p => (p.o.children || []).flatMap(c => { const v = run(c); return Array.isArray(v) ? v : [v]; });
-    const conv = el => {
+    const conv = (el, inCell) => {
       if (el.t === 'table') {
         const rows = el.o.rows || []; const n = Math.max(...rows.map(r => (r.o.children || []).length));
         const body = rows.map(r => (r.o.children || []).map(td => {
           const fill = td.o.shading && td.o.shading.fill;
-          const stack = (td.o.children || []).map(conv);
+          const stack = (td.o.children || []).map(p => conv(p, true));
           const c = stack.length === 1 ? stack[0] : { stack };
           if (fill) { c.fillColor = col(fill); }
           return c;
         }));
-        return { table: { headerRows: rows[0] && rows[0].o.tableHeader ? 1 : 0, dontBreakRows: true, widths: Array(n).fill('*'), body }, layout: { hLineColor: '#C9CED6', vLineColor: '#C9CED6', hLineWidth: () => 0.6, vLineWidth: () => 0.6, paddingLeft: () => 5, paddingRight: () => 5, paddingTop: () => 3, paddingBottom: () => 3 }, margin: [0, 4, 0, 8] };
+        const wide = n > 6, pad = wide ? 3 : 5;
+        if (wide) body.forEach(r => r.forEach(c => (Array.isArray(c.text) ? c.text : []).forEach(t => { t.fontSize = 7.5; })));
+        const widths = wide ? Array(n).fill(0).map((_, j) => j === 0 ? 24 : '*') : Array(n).fill('*');
+        return { table: { headerRows: rows[0] && rows[0].o.tableHeader ? 1 : 0, widths, body }, layout: { hLineColor: '#C9CED6', vLineColor: '#C9CED6', hLineWidth: () => 0.6, vLineWidth: () => 0.6, paddingLeft: () => pad, paddingRight: () => pad, paddingTop: () => 3, paddingBottom: () => 3 }, margin: [0, 4, 0, 8] };
       }
       const o = el.o, sp = o.spacing || {};
       const mg = [o.indent && o.indent.left ? o.indent.left / 20 : 0, (sp.before || 0) / 20, 0, (sp.after != null ? sp.after : 80) / 20];
       const img = (o.children || []).find(c => c.t === 'img');
       if (img) return { image: img.o.data, width: img.o.transformation.width * 0.75, alignment: 'center', margin: mg };
-      if (o.heading) {
+      if (o.heading && !inCell) {
         const h1 = o.heading === 'h1';
         return { text: o.text || runs(el), bold: true, fontSize: h1 ? 15 : 12, color: h1 ? '#1F3A5F' : '#1E2430', margin: [0, (sp.before || 240) / 20, 0, (sp.after || 100) / 20], headlineLevel: h1 ? 1 : 2 };
       }
       const lh = sp.line ? Math.max(1.1, sp.line / 240 * 0.92) : 1.18;
       const rr = o.children || [];
-      if (!o.bullet && rr.length === 1 && rr[0].t === 'r' && rr[0].o.bold && (rr[0].o.text || '').length < 90) return Object.assign({ text: runs(el), margin: mg, lineHeight: lh }, { headlineLevel: 3 });
+      if (!inCell && !o.bullet && rr.length === 1 && rr[0].t === 'r' && rr[0].o.bold && (rr[0].o.text || '').length < 90) return Object.assign({ text: runs(el), margin: mg, lineHeight: lh }, { headlineLevel: 3 });
       if (o.bullet) return { columns: [{ text: '•', width: 12 }, { text: runs(el), width: '*' }], columnGap: 2, margin: [6, mg[1], 0, mg[3]], lineHeight: lh };
       if (o.indent && o.indent.hanging) {
         const rs = runs(el); const first = rs[0] && /^\d+\. $/.test(rs[0].text) ? rs.shift() : null;
@@ -817,7 +820,7 @@
       if (o.alignment === 'center') x.alignment = 'center';
       return x;
     };
-    const kids = doc.o.sections[0].children.map(conv);
+    const kids = doc.o.sections[0].children.map(e => conv(e, false));
     return {
       info: { title: doc.o.title, creator: doc.o.creator },
       pageSize: 'A4', pageMargins: [55, 50, 55, 55],
