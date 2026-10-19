@@ -760,13 +760,81 @@
     let url; try { url = draw(true); } catch (e) { url = draw(false); }
     return { url, w: W, h: H };
   }
-  async function buildKaartRapport(map) {
-    if (!window.docx) { toast('Word-module niet geladen'); return; }
+  // ---- PDF: zelfde inhoud als Word, via een lichte nabootsing van de docx-bouwstenen ----
+  const PDFSHIM = (() => {
+    const mk = t => class { constructor(o) { this.t = t; this.o = typeof o === 'string' ? { text: o } : (o || {}); } };
+    return { Document: mk('doc'), Paragraph: mk('p'), TextRun: mk('r'), Table: mk('table'), TableRow: mk('tr'), TableCell: mk('td'), ImageRun: mk('img'), ExternalHyperlink: mk('a'),
+      HeadingLevel: { HEADING_1: 'h1', HEADING_2: 'h2', HEADING_3: 'h3' }, WidthType: { PERCENTAGE: 'pct' }, ShadingType: { CLEAR: 'clear' }, AlignmentType: { CENTER: 'center', LEFT: 'left' },
+      Packer: { toBlob: async d => d } };
+  })();
+  function loadScript(src) { return new Promise((res, rej) => { const e = document.createElement('script'); e.src = src; e.onload = res; e.onerror = () => rej(new Error('laden mislukt: ' + src)); document.head.appendChild(e); }); }
+  async function ensurePdfMake() {
+    if (window.pdfMake && window.pdfMake.vfs && window.pdfMake.vfs['Biolinum-R.otf']) return;
+    if (!window.pdfMake || !window.pdfMake.createPdf) await loadScript('vendor/pdfmake.min.js');
+    await loadScript('vendor/vfs_biolinum.js');
+  }
+  function docToPdf(doc) {
+    const col = c => c ? '#' + c : undefined;
+    const run = r => {
+      if (r.t === 'a') return (r.o.children || []).map(c => Object.assign(run(c), { link: r.o.link, color: '#1F3A5F', decoration: 'underline' }));
+      const o = r.o, x = { text: o.text || '' };
+      if (o.bold) x.bold = true; if (o.italics) x.italics = true; if (o.size) x.fontSize = o.size / 2; if (o.color) x.color = col(o.color);
+      if (o.underline) x.decoration = 'underline';
+      return x;
+    };
+    const runs = p => (p.o.children || []).flatMap(c => { const v = run(c); return Array.isArray(v) ? v : [v]; });
+    const conv = el => {
+      if (el.t === 'table') {
+        const rows = el.o.rows || []; const n = Math.max(...rows.map(r => (r.o.children || []).length));
+        const body = rows.map(r => (r.o.children || []).map(td => {
+          const fill = td.o.shading && td.o.shading.fill;
+          const stack = (td.o.children || []).map(conv);
+          const c = stack.length === 1 ? stack[0] : { stack };
+          if (fill) { c.fillColor = col(fill); }
+          return c;
+        }));
+        return { table: { headerRows: rows[0] && rows[0].o.tableHeader ? 1 : 0, dontBreakRows: true, widths: Array(n).fill('*'), body }, layout: { hLineColor: '#C9CED6', vLineColor: '#C9CED6', hLineWidth: () => 0.6, vLineWidth: () => 0.6, paddingLeft: () => 5, paddingRight: () => 5, paddingTop: () => 3, paddingBottom: () => 3 }, margin: [0, 4, 0, 8] };
+      }
+      const o = el.o, sp = o.spacing || {};
+      const mg = [o.indent && o.indent.left ? o.indent.left / 20 : 0, (sp.before || 0) / 20, 0, (sp.after != null ? sp.after : 80) / 20];
+      const img = (o.children || []).find(c => c.t === 'img');
+      if (img) return { image: img.o.data, width: img.o.transformation.width * 0.75, alignment: 'center', margin: mg };
+      if (o.heading) {
+        const h1 = o.heading === 'h1';
+        return { text: o.text || runs(el), bold: true, fontSize: h1 ? 15 : 12, color: h1 ? '#1F3A5F' : '#1E2430', margin: [0, (sp.before || 240) / 20, 0, (sp.after || 100) / 20], headlineLevel: h1 ? 1 : 2 };
+      }
+      const lh = sp.line ? Math.max(1.1, sp.line / 240 * 0.92) : 1.18;
+      const rr = o.children || [];
+      if (!o.bullet && rr.length === 1 && rr[0].t === 'r' && rr[0].o.bold && (rr[0].o.text || '').length < 90) return Object.assign({ text: runs(el), margin: mg, lineHeight: lh }, { headlineLevel: 3 });
+      if (o.bullet) return { columns: [{ text: '•', width: 12 }, { text: runs(el), width: '*' }], columnGap: 2, margin: [6, mg[1], 0, mg[3]], lineHeight: lh };
+      if (o.indent && o.indent.hanging) {
+        const rs = runs(el); const first = rs[0] && /^\d+\. $/.test(rs[0].text) ? rs.shift() : null;
+        if (first) return { columns: [{ text: first.text, bold: true, width: o.indent.hanging / 20 + 4 }, { text: rs, width: '*' }], columnGap: 0, margin: [o.indent.left / 20 - o.indent.hanging / 20, mg[1], 0, mg[3]], lineHeight: lh };
+        return { text: rs, margin: [0, mg[1], 0, mg[3]], lineHeight: lh };
+      }
+      if (o.shading && o.shading.fill) return { table: { widths: ['*'], body: [[{ text: runs(el), fillColor: col(o.shading.fill), lineHeight: lh }]] }, layout: { hLineWidth: () => 0, vLineWidth: () => 0, paddingLeft: () => 8, paddingRight: () => 8, paddingTop: () => 6, paddingBottom: () => 6 }, margin: [0, mg[1], 0, mg[3]] };
+      const x = { text: o.text ? o.text : runs(el), margin: mg, lineHeight: lh };
+      if (o.alignment === 'center') x.alignment = 'center';
+      return x;
+    };
+    const kids = doc.o.sections[0].children.map(conv);
+    return {
+      info: { title: doc.o.title, creator: doc.o.creator },
+      pageSize: 'A4', pageMargins: [55, 50, 55, 55],
+      defaultStyle: { font: 'Biolinum', fontSize: 10.5, color: '#1E2430' },
+      content: kids,
+      footer: (cur, tot) => ({ columns: [{ text: 'Bewijsverkenner windturbines – rapport kaart', color: '#8A8F98', fontSize: 8 }, { text: `Pagina ${cur} van ${tot}`, alignment: 'right', color: '#8A8F98', fontSize: 8 }], margin: [55, 20, 55, 0] }),
+      pageBreakBefore: (node, after) => !!node.headlineLevel && (after.length === 0 || (node.startPosition && node.startPosition.top > (node.headlineLevel === 1 ? 700 : 730)))
+    };
+  }
+  async function buildKaartRapport(map, fmt = 'docx') {
+    if (fmt === 'pdf') { try { await ensurePdfMake(); } catch (e) { toast('PDF-module niet geladen'); return; } }
+    else if (!window.docx) { toast('Word-module niet geladen'); return; }
     const list = homesSorted();
     if (!list.length) { toast('Plaats eerst turbines en woningen'); return; }
     toast('Rapport wordt gemaakt…');
     const img = await mapImage(map);
-    const { Document, Packer, Paragraph, TextRun, HeadingLevel, Table, TableRow, TableCell, WidthType, ExternalHyperlink, ShadingType, ImageRun, AlignmentType } = window.docx;
+    const { Document, Packer, Paragraph, TextRun, HeadingLevel, Table, TableRow, TableCell, WidthType, ExternalHyperlink, ShadingType, ImageRun, AlignmentType } = fmt === 'pdf' ? PDFSHIM : window.docx;
     const T = (text, o = {}) => new TextRun(Object.assign({ text, size: 21, font: 'Optima' }, o));
     const P = (text, o = {}) => new Paragraph(Object.assign({ children: [T(text)], spacing: { after: 140, line: 290 } }, o));
     const H = (text, level) => new Paragraph({ text, heading: level, spacing: { before: 260, after: 110 } });
@@ -867,7 +935,7 @@
       k.push(P(`Dit hoofdstuk geldt voor alle woningen in dit rapport. De tabel zet twee soorten peer-reviewed onderzoek naast elkaar dat een duidelijk nadelig verband vond. Links: ${SA2.length} studies naar windturbinegeluid, infrageluid en laagfrequent geluid met slaap als uitkomst. Rechts: ${SB2.length} studies naar omgevingsgeluid (vooral verkeer) die slaapverstoring in verband brengen met gezondheid, zoals hart en bloedvaten, stress en psychische gezondheid. Studies staan op volgorde van bewijskracht: eerst systematische reviews en cohortstudies, daarna experimenten, veldstudies, vragenlijststudies en overzichtsartikelen.`));
       const n2 = Math.max(SA2.length, SB2.length);
       const trs = [new TableRow({ tableHeader: true, children: [cell('Geluid en windturbines – slaap', true, '1F3A5F', 50), cell('Omgevingsgeluid – slaapverstoring en gezondheid', true, '1F3A5F', 50)] })];
-      for (let q = 0; q < n2; q++) trs.push(new TableRow({ children: [cell(SA2[q] ? kc(SA2[q]) + ' · ' + SA2[q].studietype : '', false, null, 50), cell(SB2[q] ? kc(SB2[q]) + ' · ' + SB2[q].studietype : '', false, null, 50)] }));
+      for (let q = 0; q < n2; q++) trs.push(new TableRow({ children: [cell(SA2[q] ? kc(SA2[q]) + ' · ' + SA2[q].studietype : ' ', false, null, 50), cell(SB2[q] ? kc(SB2[q]) + ' · ' + SB2[q].studietype : ' ', false, null, 50)] }));
       k.push(new Table({ width: { size: 100, type: WidthType.PERCENTAGE }, rows: trs }));
       const samen = (titel, arr) => {
         k.push(H(titel, HeadingLevel.HEADING_2));
@@ -884,9 +952,16 @@
       [...sRefs.values()].sort(byAut).forEach(litItem);
     }
     const doc = new Document({ creator: 'Bewijsverkenner windturbines', title: 'Rapport kaart: afstand tot woningen', styles: { default: { document: { run: { font: 'Optima', size: 21 } } }, paragraphStyles: [{ id: 'Heading1', name: 'Heading 1', basedOn: 'Normal', next: 'Normal', run: { size: 28, bold: true, color: '1F3A5F', font: 'Optima' } }, { id: 'Heading2', name: 'Heading 2', basedOn: 'Normal', next: 'Normal', run: { size: 24, bold: true, color: '1E2430', font: 'Optima' } }] }, sections: [{ properties: { page: { margin: { top: 1100, bottom: 1100, left: 1100, right: 1100 } } }, children: k }] });
+    const fnm = `Rapport_kaart${st.project.naam ? '_' + st.project.naam.replace(/[^\w-]+/g, '_') : ''}`;
+    if (fmt === 'pdf') {
+      const pm = window.pdfMake;
+      pm.fonts = { Biolinum: { normal: 'Biolinum-R.otf', bold: 'Biolinum-B.otf', italics: 'Biolinum-I.otf', bolditalics: 'Biolinum-B.otf' } };
+      pm.createPdf(docToPdf(doc), null, pm.fonts, pm.vfs).download(fnm + '.pdf');
+      toast('PDF-rapport gedownload'); return;
+    }
     const blob = await Packer.toBlob(doc);
     const a = document.createElement('a'); a.href = URL.createObjectURL(blob);
-    a.download = `Rapport_kaart${st.project.naam ? '_' + st.project.naam.replace(/[^\w-]+/g, '_') : ''}.docx`;
+    a.download = fnm + '.docx';
     document.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1000);
     toast('Rapport gedownload');
   }
@@ -896,7 +971,7 @@
       <div class="page-head"><div><div class="eyebrow">Hulpmiddel · alle modules</div><h1>Kaart: afstand tot woningen</h1><p>Kies welk onderzoek je wilt zien, zoek een adres en klik op de kaart om turbines, woningen en bij vervuilde elektriciteit ook kabels en een onderstation te plaatsen. Per woning zie je de afstand en het onderzoek dat daarbij past, van dichtbij naar veraf. Bij Geluid zie je ook de argumenten over nachtelijk geluid en slaap, die voor alle woningen gelden.</p></div></div>
       <div class="kaart-bar">
         <div class="field"><span class="lbl">Onderzoek tonen</span><div class="chips" id="kmods">${KMODS.map(([k, l]) => k === 'bpa' ? `<button class="chip" disabled title="Deze module wordt later gebouwd">${l}</button>` : `<button class="chip ${st.map.mods.includes(k) ? 'on' : ''}" data-km="${k}" aria-pressed="${st.map.mods.includes(k)}">${l}</button>`).join('')}</div></div>
-        <div class="field"><span class="lbl">Gebruiken</span><div class="btn-row"><button class="btn btn-sm" id="kZw">Kopieer naar zienswijze</button><button class="btn btn-sm" id="kBe">Kopieer naar beroepschrift</button><button class="btn btn-sm btn-primary" id="kRap">Rapport maken (Word)</button></div></div>
+        <div class="field"><span class="lbl">Gebruiken</span><div class="btn-row"><button class="btn btn-sm" id="kZw">Kopieer naar zienswijze</button><button class="btn btn-sm" id="kBe">Kopieer naar beroepschrift</button><button class="btn btn-sm btn-primary" id="kRap">Rapport maken (Word)</button><button class="btn btn-sm btn-primary" id="kPdf">Rapport maken (PDF)</button></div></div>
       </div>
       <div class="map-tools">
         <div class="searchbox"><input type="search" id="geo" placeholder="Zoek adres of plaats (Nederland)" autocomplete="off" aria-label="Adres zoeken"><div class="suggest" id="sug" hidden></div></div>
@@ -1001,6 +1076,7 @@
     $('#kZw').onclick = () => copyK('zienswijze');
     $('#kBe').onclick = () => copyK('beroep');
     $('#kRap').onclick = () => { if (!kmods().length) { toast('Kies eerst welk onderzoek je wilt tonen'); return; } buildKaartRapport(map).catch(err => { console.error(err); toast('Rapport maken mislukt'); }); };
+    $('#kPdf').onclick = () => { if (!kmods().length) { toast('Kies eerst welk onderzoek je wilt tonen'); return; } buildKaartRapport(map, 'pdf').catch(err => { console.error(err); toast('PDF maken mislukt'); }); };
     // PDOK geocoder
     let gt; const sug = $('#sug');
     $('#geo').addEventListener('input', e => {
