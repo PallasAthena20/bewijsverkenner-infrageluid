@@ -664,6 +664,18 @@
     });
     return groups;
   }
+  const STERK_ORDE = ['systematische review / meta-analyse', 'cohort / registerstudie', 'experimenteel mens (lab)', 'veldstudie met slaapmeting', 'veldstudie / metingen bij bewoners', 'cross-sectioneel / survey', 'narratieve review'];
+  function slaapGezondheid() {
+    const NEG = ['negatief effect gevonden', 'review – overwegend negatief bewijs'], HTH = ['hart_en_vaten', 'stress_hormonen', 'mentale_gezondheid', 'cognitie'];
+    const ok = z => z && prOf(z) === 'peer' && NEG.includes(z.richting) && STERK_ORDE.includes(z.studietype);
+    const ord = (a, b) => STERK_ORDE.indexOf(a.studietype) - STERK_ORDE.indexOf(b.studietype) || (b.jaar || 0) - (a.jaar || 0);
+    const A = INFRA_S.filter(z => (z.soort || 'gezondheid') === 'gezondheid' && (z.themas || []).includes('slaap') && ok(z)).sort(ord);
+    const sg = (INFRA_ARGS.find(a => a.id === 's_gezondheid') || { steun: [] }).steun.map(y => get(y.id));
+    const Bset = new Map();
+    INFRA_S.filter(z => z.soort === 'slaap' && (z.themas || []).some(t => HTH.includes(t)) && ok(z)).concat(sg.filter(z => z && prOf(z) === 'peer')).forEach(z => Bset.set(String(z.id), z));
+    const B = [...Bset.values()].sort(ord);
+    return { A, B };
+  }
   const SLAAP_ARGS = () => INFRA_ARGS.filter(a => /^s_/.test(a.id));
   const kmods = () => mapState().mods.filter(m => m !== 'bpa');
   const homesSorted = () => st.map.homes.map((h, i) => Object.assign(homeInfo(h), { i })).filter(x => x.t).sort((a, b) => a.dT - b.dT);
@@ -841,11 +853,32 @@
       k.push(new Paragraph({ spacing: { after: 90 }, indent: { left: 360, hanging: 360 }, children: [T(`${s.auteurs} (${s.jaar || 'z.j.'}). ${s.titel.replace(/\.$/, '')}. ${s.tijdschrift && s.tijdschrift !== 'n.a.' ? s.tijdschrift + '. ' : ''}${prNote(s) ? prNote(s).trim() + ' ' : ''}`, { size: 19 })].concat(url ? [new ExternalHyperlink({ link: url, children: [T(url, { size: 19, color: '1F3A5F', underline: {} })] })] : []) }));
     };
     const byAut = (a, b) => a.auteurs.localeCompare(b.auteurs) || (a.jaar || 0) - (b.jaar || 0);
+    if (isI) slaapGezondheid().A.concat(slaapGezondheid().B).forEach(regS);
     k.push(H('Literatuur', HeadingLevel.HEADING_1));
+    if (sRefs.size) k.push(P('Studies die ook in het hoofdstuk over slaap en gezondheid voorkomen, staan in de aparte literatuurlijst aan het einde.', { children: [T('Studies die ook in het hoofdstuk over slaap en gezondheid voorkomen, staan in de aparte literatuurlijst aan het einde.', { size: 19, color: '5F636B' })] }));
     [...refs.values()].filter(s => !sRefs.has(String(s.id))).sort(byAut).forEach(litItem);
+    if (isI) {
+      const { A: SA2, B: SB2 } = slaapGezondheid();
+      SA2.concat(SB2).forEach(regS);
+      const kc = z => `${z.auteurs} (${z.jaar || 'z.j.'})`;
+      k.push(H('Onderzoek naar slaapverstoring, geluid en gezondheid', HeadingLevel.HEADING_1));
+      k.push(P(`Dit hoofdstuk geldt voor alle woningen in dit rapport. De tabel zet twee soorten peer-reviewed onderzoek naast elkaar dat een duidelijk nadelig verband vond. Links: ${SA2.length} studies naar windturbinegeluid, infrageluid en laagfrequent geluid met slaap als uitkomst. Rechts: ${SB2.length} studies naar omgevingsgeluid (vooral verkeer) die slaapverstoring in verband brengen met gezondheid, zoals hart en bloedvaten, stress en psychische gezondheid. Studies staan op volgorde van bewijskracht: eerst systematische reviews en cohortstudies, daarna experimenten, veldstudies, vragenlijststudies en overzichtsartikelen.`));
+      const n2 = Math.max(SA2.length, SB2.length);
+      const trs = [new TableRow({ tableHeader: true, children: [cell('Geluid en windturbines – slaap', true, '1F3A5F', 50), cell('Omgevingsgeluid – slaapverstoring en gezondheid', true, '1F3A5F', 50)] })];
+      for (let q = 0; q < n2; q++) trs.push(new TableRow({ children: [cell(SA2[q] ? kc(SA2[q]) + ' · ' + SA2[q].studietype : '', false, null, 50), cell(SB2[q] ? kc(SB2[q]) + ' · ' + SB2[q].studietype : '', false, null, 50)] }));
+      k.push(new Table({ width: { size: 100, type: WidthType.PERCENTAGE }, rows: trs }));
+      const samen = (titel, arr) => {
+        k.push(H(titel, HeadingLevel.HEADING_2));
+        arr.forEach(z => k.push(new Paragraph({ spacing: { after: 100, line: 280 }, children: [T(kc(z) + ' – ', { bold: true }), T(z.studietype + '. ', { color: '5F636B' }), T(z.bevinding)] })));
+      };
+      k.push(H('Korte samenvattingen', HeadingLevel.HEADING_1));
+      k.push(P('De samenvattingen geven weer wat de auteurs in het abstract rapporteren. Controleer de oorspronkelijke publicatie voordat je citeert.', { children: [T('De samenvattingen geven weer wat de auteurs in het abstract rapporteren. Controleer de oorspronkelijke publicatie voordat je citeert.', { size: 19, color: '5F636B' })] }));
+      samen('Geluid en windturbines – slaap', SA2);
+      samen('Omgevingsgeluid – slaapverstoring en gezondheid', SB2);
+    }
     if (sRefs.size) {
-      k.push(H('Onderzoek naar slaapverstoring door omgevingsgeluid', HeadingLevel.HEADING_1));
-      k.push(P(`Alle ${sRefs.size} peer-reviewed studies waarop de argumenten over nachtelijk geluid en slaap in dit rapport steunen. Ze gelden voor alle woningen in dit rapport.`));
+      k.push(H('Literatuur slaap en gezondheid', HeadingLevel.HEADING_1));
+      k.push(P(`Alle ${sRefs.size} peer-reviewed studies uit het hoofdstuk over nachtelijk geluid en slaap en uit de tabel hierboven.`));
       [...sRefs.values()].sort(byAut).forEach(litItem);
     }
     const doc = new Document({ creator: 'Bewijsverkenner windturbines', title: 'Rapport kaart: afstand tot woningen', styles: { default: { document: { run: { font: 'Optima', size: 21 } } }, paragraphStyles: [{ id: 'Heading1', name: 'Heading 1', basedOn: 'Normal', next: 'Normal', run: { size: 28, bold: true, color: '1F3A5F', font: 'Optima' } }, { id: 'Heading2', name: 'Heading 2', basedOn: 'Normal', next: 'Normal', run: { size: 24, bold: true, color: '1E2430', font: 'Optima' } }] }, sections: [{ properties: { page: { margin: { top: 1100, bottom: 1100, left: 1100, right: 1100 } } }, children: k }] });
