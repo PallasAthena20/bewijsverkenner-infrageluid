@@ -740,10 +740,9 @@
         st.map.stations.forEach(s => { const [x, y] = P(s); g.fillStyle = '#6B4BA1'; g.strokeStyle = '#fff'; g.lineWidth = 3; g.fillRect(x - 13, y - 13, 26, 26); g.strokeRect(x - 13, y - 13, 26, 26); });
       }
       homesSorted().forEach((x, n) => { const a = P(x.h.ll), b = P(st.map.turbines[x.t.i]); g.beginPath(); g.moveTo(a[0], a[1]); g.lineTo(b[0], b[1]); g.strokeStyle = 'rgba(31,58,95,.8)'; g.lineWidth = 2; g.setLineDash([5, 7]); g.stroke(); g.setLineDash([]); });
-      st.map.turbines.forEach((t, i) => { const [x, y] = P(t); g.beginPath(); g.arc(x, y, 16, 0, 2 * Math.PI); g.fillStyle = '#9A3B1E'; g.fill(); g.lineWidth = 3; g.strokeStyle = '#fff'; g.stroke(); g.fillStyle = '#fff'; g.font = 'bold 16px Arial'; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText('T' + (i + 1), x, y + 1); });
-      homesSorted().forEach((x, n) => { const [px, py] = P(x.h.ll); g.beginPath(); g.arc(px, py, 15, 0, 2 * Math.PI); g.fillStyle = '#1F3A5F'; g.fill(); g.lineWidth = 3; g.strokeStyle = '#fff'; g.stroke(); g.fillStyle = '#fff'; g.font = 'bold 15px Arial'; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText(String(n + 1), px, py + 1);
-        const lbl = `${n + 1}. ${x.h.naam} – ${fmtM(x.dT)}`; g.font = 'bold 17px Arial'; g.textAlign = 'left'; const w = g.measureText(lbl).width; g.fillStyle = 'rgba(255,255,255,.92)'; g.fillRect(px + 20, py - 13, w + 12, 26); g.fillStyle = '#1F3A5F'; g.fillText(lbl, px + 26, py + 1); });
-      g.font = '14px Arial'; g.textAlign = 'right'; g.textBaseline = 'bottom'; g.fillStyle = 'rgba(255,255,255,.85)'; g.fillRect(W - 230, H - 24, 230, 24); g.fillStyle = '#333'; g.fillText(withTiles ? '© OpenStreetMap-bijdragers' : 'Schematische weergave', W - 8, H - 5);
+      st.map.turbines.forEach((t, i) => { const [x, y] = P(t); g.beginPath(); g.arc(x, y, 22, 0, 2 * Math.PI); g.fillStyle = '#9A3B1E'; g.fill(); g.lineWidth = 3; g.strokeStyle = '#fff'; g.stroke(); g.fillStyle = '#fff'; g.font = 'bold 18px Optima, Candara, "Segoe UI", sans-serif'; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText('T' + (i + 1), x, y + 1); });
+      homesSorted().forEach((x, n) => { const [px, py] = P(x.h.ll); g.beginPath(); g.arc(px, py, 23, 0, 2 * Math.PI); g.fillStyle = '#1F3A5F'; g.fill(); g.lineWidth = 3; g.strokeStyle = '#fff'; g.stroke(); g.fillStyle = '#fff'; g.font = `bold ${n + 1 > 9 ? 16 : 18}px Optima, Candara, "Segoe UI", sans-serif`; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText('W' + (n + 1), px, py + 1); });
+      g.font = '14px Optima, Candara, "Segoe UI", sans-serif'; g.textAlign = 'right'; g.textBaseline = 'bottom'; g.fillStyle = 'rgba(255,255,255,.85)'; g.fillRect(W - 230, H - 24, 230, 24); g.fillStyle = '#333'; g.fillText(withTiles ? '© OpenStreetMap-bijdragers' : 'Schematische weergave', W - 8, H - 5);
       return cv.toDataURL('image/png');
     };
     let url; try { url = draw(true); } catch (e) { url = draw(false); }
@@ -756,11 +755,11 @@
     toast('Rapport wordt gemaakt…');
     const img = await mapImage(map);
     const { Document, Packer, Paragraph, TextRun, HeadingLevel, Table, TableRow, TableCell, WidthType, ExternalHyperlink, ShadingType, ImageRun, AlignmentType } = window.docx;
-    const T = (text, o = {}) => new TextRun(Object.assign({ text, size: 21, font: 'Calibri' }, o));
+    const T = (text, o = {}) => new TextRun(Object.assign({ text, size: 21, font: 'Optima' }, o));
     const P = (text, o = {}) => new Paragraph(Object.assign({ children: [T(text)], spacing: { after: 140, line: 290 } }, o));
     const H = (text, level) => new Paragraph({ text, heading: level, spacing: { before: 260, after: 110 } });
     const B = (bold, text, contra) => new Paragraph({ bullet: { level: 0 }, spacing: { after: 60 }, children: [T(bold, { bold: true, color: contra ? '5F636B' : undefined }), T(text, { color: contra ? '5F636B' : undefined })] });
-    const tip = Number(st.project.tiphoogte) || null; const refs = new Map(); const reg = s => { refs.set(String(s.id), s); return s; };
+    const tip = Number(st.project.tiphoogte) || null; const refs = new Map(); const reg = s => { refs.set(String(s.id), s); return s; }; const sRefs = new Map(); const regS = s => { sRefs.set(String(s.id), s); return s; };
     const mods = kmods(); const isE = mods.includes('elek'), isI = mods.includes('infra');
     const k = [];
     k.push(new Paragraph({ children: [T('Rapport kaart', { size: 20, color: '5F636B' })], spacing: { after: 60 } }));
@@ -769,7 +768,7 @@
     k.push(P(`Onderwerpen: ${mods.map(m => KMODS.find(x => x[0] === m)[1].toLowerCase()).join('; ')}. ${st.map.turbines.length} windturbine${st.map.turbines.length === 1 ? '' : 's'}${tip ? ` met een tiphoogte van ${tip} m` : ''}, ${list.length} woning${list.length === 1 ? '' : 'en'}. Datum: ${new Date().toLocaleDateString('nl-NL')}.`));
     const wPx = 620, hPx = Math.round(wPx * img.h / img.w);
     k.push(new Paragraph({ alignment: AlignmentType.CENTER, children: [new ImageRun({ data: img.url, transformation: { width: wPx, height: hPx } })], spacing: { after: 80 } }));
-    k.push(new Paragraph({ children: [T(`Kaart: T = windturbine (rood), genummerde punten = woningen (blauw), ringen op 500 m, 1, 1,5 en 2 km${isE ? '; paarse stippellijn = ondergrondse kabel, gele lijn = hoogspanningslijn (HS-lijn), paars vierkant = onderstation' : ''}. Afstanden zijn hemelsbreed.`, { size: 18, color: '5F636B' })], spacing: { after: 200 } }));
+    k.push(new Paragraph({ children: [T(`Kaart: T = windturbine (rood), W1, W2 enz. = woningen (blauw), genummerd van dichtbij naar veraf, ringen op 500 m, 1, 1,5 en 2 km${isE ? '; paarse stippellijn = ondergrondse kabel, gele lijn = hoogspanningslijn (HS-lijn), paars vierkant = onderstation' : ''}. Afstanden zijn hemelsbreed.`, { size: 18, color: '5F636B' })], spacing: { after: 200 } }));
     k.push(H('Overzicht van dichtbij naar veraf', HeadingLevel.HEADING_1));
     const cell = (t, bold, fill, w) => new TableCell({ width: { size: w, type: WidthType.PERCENTAGE }, shading: fill ? { type: ShadingType.CLEAR, color: 'auto', fill } : undefined, margins: { top: 50, bottom: 50, left: 80, right: 80 }, children: [new Paragraph({ children: [T(t || '–', { bold, size: 18, color: fill ? 'FFFFFF' : undefined })] })] });
     const hdr = ['Nr.', 'Woning', 'Turbine', tip ? '× tiphoogte' : null, isE ? 'Kabel' : null, isE ? 'HS-lijn' : null, isE ? 'Onderstation' : null, 'Studies'].filter(Boolean);
@@ -777,13 +776,13 @@
     const rows = [new TableRow({ tableHeader: true, children: hdr.map(h => cell(h, true, '1F3A5F', cw)) })];
     list.forEach((x, n) => {
       const ns = (isI ? infraHits(x.dT).steun.length : 0) + (isE ? elekHits(x).flatMap(g => g.steun).length : 0);
-      const v = [String(n + 1), x.h.naam, fmtM(x.dT), tip ? (x.dT / tip).toLocaleString('nl-NL', { maximumFractionDigits: 1 }) + '×' : null, isE ? (x.dK != null ? fmtM(x.dK) : '–') : null, isE ? (x.dL != null ? fmtM(x.dL) : '–') : null, isE ? (x.dS != null ? fmtM(x.dS) : '–') : null, String(ns)].filter(y => y !== null);
+      const v = ['W' + (n + 1), x.h.naam, fmtM(x.dT), tip ? (x.dT / tip).toLocaleString('nl-NL', { maximumFractionDigits: 1 }) + '×' : null, isE ? (x.dK != null ? fmtM(x.dK) : '–') : null, isE ? (x.dL != null ? fmtM(x.dL) : '–') : null, isE ? (x.dS != null ? fmtM(x.dS) : '–') : null, String(ns)].filter(y => y !== null);
       rows.push(new TableRow({ children: v.map((t, j) => cell(t, j < 2, null, cw)) }));
     });
     k.push(new Table({ width: { size: 100, type: WidthType.PERCENTAGE }, rows }));
     k.push(H('Per woning', HeadingLevel.HEADING_1));
     list.forEach((x, n) => {
-      k.push(H(`${n + 1}. ${x.h.naam} – ${fmtM(x.dT)}`, HeadingLevel.HEADING_2));
+      k.push(H(`W${n + 1} · ${x.h.naam} – ${fmtM(x.dT)}`, HeadingLevel.HEADING_2));
       k.push(P(distZin(x, tip)));
       if (isI) {
         const r = infraHits(x.dT);
@@ -791,6 +790,9 @@
         if (r.steun.length) r.steun.forEach(y => k.push(B(`${reg(y.s).auteurs} (${y.s.jaar || 'z.j.'}): `, y.a.label + '.')));
         else k.push(P('Deze afstand valt buiten de afstanden van de woonstudies met een nadelig effect. Recent onderzoek wijst er wel op dat infrageluid verder reikt dan rekenmodellen voorspellen (Mattsson et al., 2026).'));
         if (r.verweer.length) { k.push(new Paragraph({ children: [T('Verwacht verweer bij deze afstand', { bold: true, color: '5F636B' })], spacing: { before: 80, after: 60 } })); r.verweer.forEach(y => k.push(B(`${reg(y.s).auteurs} (${y.s.jaar || 'z.j.'}): `, y.a.label + '.', true))); }
+        const wb = get('S967'), sm = INFRA_S.find(z => z.soort === 'slaap' && /^Smith/.test(z.auteurs) && z.jaar === 2022 && /update|systematic/i.test(z.titel));
+        const sc = [wb, sm].filter(Boolean).map(z => { regS(z); return `${z.auteurs}, ${z.jaar}`; });
+        k.push(new Paragraph({ spacing: { before: 100, after: 140, line: 290 }, shading: { type: ShadingType.CLEAR, color: 'auto', fill: 'EEF2F7' }, children: [T('Slaapverstoring door omgevingsgeluid: ', { bold: true }), T(`ook van toepassing op deze woning. Nachtelijk omgevingsgeluid verstoort aantoonbaar de slaap${sc.length ? ' (' + sc.join('; ') + ')' : ''}. De WHO adviseert ’s nachts buiten maximaal 40 dB (Lnight). Zie het hoofdstuk ‘Nachtelijk geluid en slaap’ en de onderzoekslijst aan het einde van dit rapport.`)] }));
       }
       if (isE) {
         const gs = elekHits(x);
@@ -808,7 +810,7 @@
       if (SA.length) {
         k.push(H('Nachtelijk geluid en slaap', HeadingLevel.HEADING_1));
         k.push(P('De onderstaande argumenten gelden voor alle woningen op de kaart, ongeacht de afstand. Ze steunen op peer-reviewed onderzoek naar nachtelijk omgevingsgeluid en slaap, waaronder de systematische review voor de WHO-richtlijnen. Dat onderzoek gaat vaak over verkeersgeluid; per argument staat in een doorredenering waarom het ook relevant is voor nachtelijk windturbinegeluid.'));
-        const cite = ids => { const ss = (ids || []).map(get).filter(Boolean); ss.forEach(reg); return ss.length ? ' (' + ss.map(z => `${z.auteurs.replace(/ et al\.?$/, '')}${/et al/.test(z.auteurs) ? ' et al.' : ''}, ${z.jaar || 'z.j.'}`).join('; ') + ')' : ''; };
+        const cite = ids => { const ss = (ids || []).map(get).filter(Boolean); ss.forEach(regS); return ss.length ? ' (' + ss.map(z => `${z.auteurs.replace(/ et al\.?$/, '')}${/et al/.test(z.auteurs) ? ' et al.' : ''}, ${z.jaar || 'z.j.'}`).join('; ') + ')' : ''; };
         SA.forEach(a => {
           k.push(H(`${a.titel} (bewijs: ${a.sterkte.toLowerCase()})`, HeadingLevel.HEADING_2));
           k.push(P(a.kern));
@@ -822,7 +824,8 @@
           const top = (a.steun || []).map(y => ({ y, s: get(y.id) })).filter(z => z.s && prOf(z.s) === 'peer').slice(0, 3);
           if (top.length) {
             k.push(new Paragraph({ children: [T('Belangrijkste onderzoek', { bold: true })], spacing: { before: 60, after: 60 } }));
-            top.forEach(z => k.push(B(`${reg(z.s).auteurs} (${z.s.jaar || 'z.j.'}): `, z.y.punt)));
+            top.forEach(z => k.push(B(`${regS(z.s).auteurs} (${z.s.jaar || 'z.j.'}): `, z.y.punt)));
+          (a.steun || []).map(y => get(y.id)).filter(z => z && prOf(z) === 'peer').forEach(regS);
           }
           (a.extern || []).forEach(e => k.push(new Paragraph({ bullet: { level: 0 }, spacing: { after: 60 }, children: [T(e.label + ' – ')].concat([new ExternalHyperlink({ link: e.url, children: [T(e.url, { color: '1F3A5F', underline: {} })] })]) })));
         });
@@ -833,12 +836,19 @@
     if (isE) k.push(P('Vervuilde elektriciteit: afstandsgrenzen zijn gebruikt als een studie die zelf noemt. Onderzoek over ondergrondse kabels wordt getoond tot 50 m van het tracé; dat is een keuze van deze tool, omdat het onderzoek alleen ‘vlak bij’ de kabel noemt. Vuile stroom en zwerfstroom verspreiden zich via het elektriciteitsnet en de grond; afstand alleen is daarom geen garantie. Bij bronnen die niet (aantoonbaar) peer-reviewed zijn, staat dat vermeld. Het bewijs voor gezondheidseffecten van vuile stroom is beperkt en omstreden.'));
     k.push(P('Dit rapport is een hulpmiddel en geen juridisch advies. Controleer de oorspronkelijke publicaties voordat je citeert.', { children: [T('Dit rapport is een hulpmiddel en geen juridisch advies. Controleer de oorspronkelijke publicaties voordat je citeert.', { size: 19, color: '5F636B' })] }));
     if (isI) { const mt = INFRA_S.find(s => /mattsson/i.test(s.auteurs) && s.jaar === 2026); if (mt) reg(mt); }
-    k.push(H('Literatuur', HeadingLevel.HEADING_1));
-    [...refs.values()].sort((a, b) => a.auteurs.localeCompare(b.auteurs)).forEach(s => {
+    const litItem = s => {
       const url = s.doi && !/^\d+$/.test(s.doi) ? `https://doi.org/${s.doi}` : s.link;
       k.push(new Paragraph({ spacing: { after: 90 }, indent: { left: 360, hanging: 360 }, children: [T(`${s.auteurs} (${s.jaar || 'z.j.'}). ${s.titel.replace(/\.$/, '')}. ${s.tijdschrift && s.tijdschrift !== 'n.a.' ? s.tijdschrift + '. ' : ''}${prNote(s) ? prNote(s).trim() + ' ' : ''}`, { size: 19 })].concat(url ? [new ExternalHyperlink({ link: url, children: [T(url, { size: 19, color: '1F3A5F', underline: {} })] })] : []) }));
-    });
-    const doc = new Document({ creator: 'Bewijsverkenner windturbines', title: 'Rapport kaart: afstand tot woningen', styles: { default: { document: { run: { font: 'Calibri', size: 21 } } }, paragraphStyles: [{ id: 'Heading1', name: 'Heading 1', basedOn: 'Normal', next: 'Normal', run: { size: 28, bold: true, color: '1F3A5F', font: 'Calibri' } }, { id: 'Heading2', name: 'Heading 2', basedOn: 'Normal', next: 'Normal', run: { size: 24, bold: true, color: '1E2430', font: 'Calibri' } }] }, sections: [{ properties: { page: { margin: { top: 1100, bottom: 1100, left: 1100, right: 1100 } } }, children: k }] });
+    };
+    const byAut = (a, b) => a.auteurs.localeCompare(b.auteurs) || (a.jaar || 0) - (b.jaar || 0);
+    k.push(H('Literatuur', HeadingLevel.HEADING_1));
+    [...refs.values()].filter(s => !sRefs.has(String(s.id))).sort(byAut).forEach(litItem);
+    if (sRefs.size) {
+      k.push(H('Onderzoek naar slaapverstoring door omgevingsgeluid', HeadingLevel.HEADING_1));
+      k.push(P(`Alle ${sRefs.size} peer-reviewed studies waarop de argumenten over nachtelijk geluid en slaap in dit rapport steunen. Ze gelden voor alle woningen in dit rapport.`));
+      [...sRefs.values()].sort(byAut).forEach(litItem);
+    }
+    const doc = new Document({ creator: 'Bewijsverkenner windturbines', title: 'Rapport kaart: afstand tot woningen', styles: { default: { document: { run: { font: 'Optima', size: 21 } } }, paragraphStyles: [{ id: 'Heading1', name: 'Heading 1', basedOn: 'Normal', next: 'Normal', run: { size: 28, bold: true, color: '1F3A5F', font: 'Optima' } }, { id: 'Heading2', name: 'Heading 2', basedOn: 'Normal', next: 'Normal', run: { size: 24, bold: true, color: '1E2430', font: 'Optima' } }] }, sections: [{ properties: { page: { margin: { top: 1100, bottom: 1100, left: 1100, right: 1100 } } }, children: k }] });
     const blob = await Packer.toBlob(doc);
     const a = document.createElement('a'); a.href = URL.createObjectURL(blob);
     a.download = `Rapport_kaart${st.project.naam ? '_' + st.project.naam.replace(/[^\w-]+/g, '_') : ''}.docx`;
